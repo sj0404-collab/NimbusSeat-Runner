@@ -57,7 +57,8 @@ host/                     Host-manager для Windows 11 (Python 3.11+)
   config.example.json     Пример конфигурации
 clients/
   desktop/                Клиент для Windows/Linux (Python + Tkinter, один файл)
-  android/                Android-клиент (Kotlin), запускает Moonlight по intent
+  android/                Тонкий Android-клиент (Kotlin), запускает внешний Moonlight
+  android-allinone/       All-in-one APK: лаунчер + встроенный Moonlight (GPL-3.0)
 docs/                     Пошаговая настройка: хост, ASTER, Duo, клиенты, FAQ
 ```
 
@@ -75,12 +76,17 @@ docs/                     Пошаговая настройка: хост, ASTER
 
 ## Быстрый старт (клиент)
 
+- **Android (рекомендуется):** скачайте **[NimbusSeat-allinone-release.apk](https://github.com/sj0404-collab/NimbusSeat-Runner/releases/latest)** —
+  один APK со встроенным open-source Moonlight (GPL-3.0), release-подпись,
+  ничего дополнительно ставить не нужно. Исходники: `clients/android-allinone/`.
 - **Windows/Linux:** установите Moonlight, затем `python clients/desktop/nimbusseat_client.py` —
   хост найдётся сам, кнопка **Play** запустит стрим.
-- **Android:** установите Moonlight из Play Market, соберите/установите `clients/android`,
-  откройте приложение — хост найдётся сам.
+- **Android (тонкий клиент):** `clients/android` — вариант, который использует
+  отдельно установленный Moonlight.
 
 ## Лицензия
 
-MIT. Duo/Apollo/Sunshine, Moonlight и ASTER V7 — продукты их авторов со своими лицензиями
-(ASTER V7 — платный, требуется своя лицензия).
+Код этого репозитория — MIT. **All-in-one APK** — производная работа от
+[moonlight-android](https://github.com/moonlight-stream/moonlight-android) и
+распространяется по **GPL-3.0**. Duo/Apollo/Sunshine и ASTER V7 — продукты их
+авторов со своими лицензиями (ASTER V7 — платный, требуется своя лицензия).
