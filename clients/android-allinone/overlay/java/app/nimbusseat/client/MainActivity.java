@@ -81,6 +81,9 @@ public class MainActivity extends Activity {
         Button moonlight = button(root, "🌙  Открыть Moonlight");
         moonlight.setOnClickListener(v -> startActivity(new Intent(this, PcView.class)));
 
+        Button cloud = button(root, "☁  Облачное место (раннер)");
+        cloud.setOnClickListener(v -> startActivity(new Intent(this, CloudSeatActivity.class)));
+
         Button rescan = button(root, "⟳  Обновить");
         rescan.setOnClickListener(v -> rescan());
 

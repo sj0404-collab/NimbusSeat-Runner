@@ -13,6 +13,56 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r host/requirements.txt pytest
-      - run: python -m pytest host/tests -v
+      - name: Host manager tests
+        run: python -m pytest host/tests -v
         env:
           PYTHONPATH: host
+      - name: nimbusctl tests
+        run: python -m pytest tools/tests -v
+      - name: Python syntax (all clients/tools)
+        run: |
+          python - <<'PY'
+          import ast, glob
+          files = glob.glob('host/**/*.py', recursive=True) \
+                + glob.glob('clients/**/*.py', recursive=True) \
+                + glob.glob('tools/**/*.py', recursive=True)
+          for f in files:
+              ast.parse(open(f).read(), f)
+          print(f"OK: {len(files)} files")
+          PY
+      - name: nimbus.html sanity
+        run: |
+          python - <<'PY'
+          html = open('clients/web-touch/nimbus.html').read()
+          for token in ['gamepadconnected', 'sendKey', 'data-gb', 'resChips',
+                        'fpsChips', 'bEye', 'websockify', 'applySrv']:
+              assert token in html, f"missing {token}"
+          print("nimbus.html OK")
+          PY
+
+  smoke-desktop-stack:
+    # тест через раннер: реально поднимаем Xvfb + x11vnc + control server + gamepad bridge
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install stack
+        run: |
+          sudo apt-get update -q
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -q \
+            xvfb x11vnc python3-evdev python3-websockets websockify novnc
+      - name: Gamepad bridge starts and creates device
+        run: |
+          sudo modprobe uinput
+          sudo timeout 10 python3 clients/web-touch/gamepad_bridge.py --port 6081 &
+          sleep 3
+          ls /dev/input/ | grep -E 'event|js' && echo "uinput device OK"
+      - name: Desktop + VNC + control server respond
+        run: |
+          export DISPLAY=:99 VNC_PASS=testpass
+          Xvfb :99 -screen 0 640x480x24 & sleep 2
+          x11vnc -display :99 -forever -passwd testpass -rfbport 5900 -quiet & sleep 2
+          CTL_KEY=testpass DESKTOP_SCRIPT=/bin/true python3 clients/web-touch/control_server.py & sleep 2
+          curl -sf "http://localhost:6082/ping?key=testpass" | grep pong
+          curl -s "http://localhost:6082/ping?key=WRONG" | grep error
+          curl -sf "http://localhost:6082/resize?w=800&h=600&fps=30&key=testpass" | grep ok
+          echo "control server OK"

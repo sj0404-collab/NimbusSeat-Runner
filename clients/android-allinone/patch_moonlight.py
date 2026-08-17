@@ -59,6 +59,12 @@ m = m.replace(
 
 activity = """
         <activity
+            android:name="app.nimbusseat.client.CloudSeatActivity"
+            android:label="NimbusSeat Cloud"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|uiMode|keyboard|keyboardHidden" />
+
+        <activity
             android:name="app.nimbusseat.client.MainActivity"
             android:label="NimbusSeat"
             android:exported="true"

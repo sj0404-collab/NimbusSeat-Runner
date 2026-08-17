@@ -5,6 +5,12 @@ on:
       minutes:
         description: "Session length, minutes (max 340)"
         default: "340"
+      resolution:
+        description: "WxH"
+        default: "1280x720"
+      fps:
+        description: "frames per second (x11vnc capture)"
+        default: "30"
 
 permissions:
   contents: write
@@ -21,8 +27,7 @@ jobs:
           sudo apt-get update -q
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -q \
             xvfb openbox x11vnc novnc websockify mesa-utils supertuxkart \
-            fonts-dejavu chromium-browser python3-evdev python3-websockets \
-            pulseaudio
+            fonts-dejavu chromium-browser python3-evdev python3-websockets pulseaudio
 
       - name: Download cloudflared
         run: |
@@ -37,65 +42,98 @@ jobs:
             --port 6081 > /tmp/gamepad.log 2>&1 &
           sleep 2
           sudo cat /tmp/gamepad.log
-          # joystick device должен появиться
-          ls -l /dev/input/js* /dev/input/event* | tail -5
 
-      - name: Start virtual desktop
+      - name: Prepare restartable desktop script
         run: |
-          export DISPLAY=:99
-          Xvfb :99 -screen 0 1280x720x24 &
-          sleep 2
-          openbox &
-          pulseaudio --start || true
-          # SuperTuxKart (software GL)
-          LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe supertuxkart \
-            --screensize=1280x720 --fullscreen > /tmp/stk.log 2>&1 &
-          # Chromium с GeForce NOW (вход по вашему аккаунту через VNC)
-          LIBGL_ALWAYS_SOFTWARE=1 chromium-browser --no-sandbox --disable-gpu \
-            --window-size=1280,720 --start-maximized \
-            --user-data-dir=/tmp/chrome-profile \
-            https://play.geforcenow.com > /tmp/chrome.log 2>&1 &
-          sleep 5
           PASS=$(head -c 9 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 10)
           echo "VNC_PASS=$PASS" >> $GITHUB_ENV
-          x11vnc -display :99 -forever -shared -passwd "$PASS" -rfbport 5900 -quiet &
-          # web root: noVNC + наша страница с двумя режимами управления
+          cat > /tmp/desktop.sh <<'DESK'
+          #!/bin/bash
+          # /tmp/desktop.sh WIDTH HEIGHT FPS  — (re)start Xvfb+apps+x11vnc
+          W=${1:-1280}; H=${2:-720}; FPS=${3:-30}
+          pkill -f 'x11vnc' || true
+          pkill -f 'supertuxkart' || true
+          pkill -f 'chromium' || true
+          pkill -f 'openbox' || true
+          pkill -f 'Xvfb :99' || true
+          sleep 1
+          export DISPLAY=:99
+          Xvfb :99 -screen 0 ${W}x${H}x24 &
+          sleep 2
+          openbox &
+          LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe supertuxkart \
+            --screensize=${W}x${H} --fullscreen > /tmp/stk.log 2>&1 &
+          LIBGL_ALWAYS_SOFTWARE=1 chromium-browser --no-sandbox --disable-gpu \
+            --window-size=${W},${H} --start-maximized \
+            --user-data-dir=/tmp/chrome-profile \
+            https://play.geforcenow.com > /tmp/chrome.log 2>&1 &
+          sleep 4
+          x11vnc -display :99 -forever -shared -passwd "$VNC_PASS" \
+            -rfbport 5900 -defer $((1000/FPS)) -wait $((1000/FPS)) -quiet &
+          echo "${W}x${H}@${FPS}" > /tmp/current_mode
+          DESK
+          chmod +x /tmp/desktop.sh
+
+      - name: Start desktop + web + control
+        run: |
+          export VNC_PASS
+          R="${{ github.event.inputs.resolution }}"
+          bash /tmp/desktop.sh "${R%x*}" "${R#*x}" "${{ github.event.inputs.fps }}"
           mkdir -p /tmp/web
           cp -r /usr/share/novnc/* /tmp/web/
           cp "$GITHUB_WORKSPACE/clients/web-touch/nimbus.html" /tmp/web/nimbus.html
           websockify --web /tmp/web 6080 localhost:5900 &
+          CTL_KEY="$VNC_PASS" DESKTOP_SCRIPT=/tmp/desktop.sh VNC_PASS="$VNC_PASS" \
+            nohup python3 "$GITHUB_WORKSPACE/clients/web-touch/control_server.py" \
+            > /tmp/ctl.log 2>&1 &
           sleep 2
 
       - name: Open tunnels and publish URLs
         run: |
           /tmp/cloudflared tunnel --url http://localhost:6080 --no-autoupdate > /tmp/cf1.log 2>&1 &
           /tmp/cloudflared tunnel --url http://localhost:6081 --no-autoupdate > /tmp/cf2.log 2>&1 &
+          /tmp/cloudflared tunnel --url http://localhost:6082 --no-autoupdate > /tmp/cf3.log 2>&1 &
           for i in $(seq 1 30); do
             URL1=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' /tmp/cf1.log | head -1 || true)
             URL2=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' /tmp/cf2.log | head -1 || true)
-            [ -n "$URL1" ] && [ -n "$URL2" ] && break
+            URL3=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' /tmp/cf3.log | head -1 || true)
+            [ -n "$URL1" ] && [ -n "$URL2" ] && [ -n "$URL3" ] && break
             sleep 2
           done
           [ -z "$URL1" ] && { cat /tmp/cf1.log; exit 1; }
-          [ -z "$URL2" ] && { cat /tmp/cf2.log; exit 1; }
           GPWS="wss://${URL2#https://}/"
-          # URL-encode wss url for query param
-          GPENC=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=''))" "$GPWS")
+          enc() { python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=''))" "$1"; }
+          FULL="$URL1/nimbus.html?pw=$VNC_PASS&gp=$(enc "$GPWS")&ctl=$(enc "$URL3")"
           END=$(date -u -d "+${{ github.event.inputs.minutes }} minutes" +"%Y-%m-%d %H:%M UTC")
           mkdir -p /tmp/live && cd /tmp/live
           git init -q -b live
+          # человекочитаемый файл
           cat > SESSION.md <<EOM
           # NimbusSeat Remote Seat — LIVE
 
-          - **📱 Подключение (2 режима: клава/мышь + геймпад):**
-            $URL1/nimbus.html?pw=$VNC_PASS&gp=$GPENC
-          - **🖥 Классический noVNC (ПК):** $URL1/vnc.html?autoconnect=true&resize=scale
-          - **Пароль VNC:** \`$VNC_PASS\`
-          - На рабочем столе: SuperTuxKart + Chromium с GeForce NOW
-          - Виртуальный геймпад: Xbox 360 (uinput), мост: $GPWS
-          - Сессия завершится примерно: $END
+          - **📱 Подключение:** $FULL
+          - **🖥 Классический noVNC:** $URL1/vnc.html?autoconnect=true&resize=scale
+          - Пароль VNC: \`$VNC_PASS\`
+          - Режим: ${{ github.event.inputs.resolution }} @ ${{ github.event.inputs.fps }} fps (меняется в ⚙ настройках)
+          - До: $END
           EOM
-          git add SESSION.md
+          # машиночитаемый файл для APK / desktop-клиентов
+          cat > session.json <<EOM
+          {
+            "version": 1,
+            "state": "live",
+            "url": "$FULL",
+            "novnc": "$URL1/vnc.html?autoconnect=true&resize=scale",
+            "web": "$URL1",
+            "gamepad_ws": "$GPWS",
+            "control": "$URL3",
+            "password": "$VNC_PASS",
+            "resolution": "${{ github.event.inputs.resolution }}",
+            "fps": ${{ github.event.inputs.fps }},
+            "ends_at_utc": "$END"
+          }
+          EOM
+          git add SESSION.md session.json
           git -c user.name=runner -c user.email=runner@local commit -qm "live session info"
           git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" live:live
 
@@ -103,3 +141,14 @@ jobs:
         run: |
           echo "Session running for ${{ github.event.inputs.minutes }} minutes..."
           sleep $(( ${{ github.event.inputs.minutes }} * 60 ))
+
+      - name: Mark session over
+        if: always()
+        run: |
+          mkdir -p /tmp/over && cd /tmp/over
+          git init -q -b live
+          echo '{"version":1,"state":"offline"}' > session.json
+          echo '# Session over' > SESSION.md
+          git add -A
+          git -c user.name=runner -c user.email=runner@local commit -qm "session over"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" live:live || true

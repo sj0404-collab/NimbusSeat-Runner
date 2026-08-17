@@ -3,335 +3,312 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NimbusSeat — Remote Seat</title>
+<title>NimbusSeat</title>
 <style>
-  html,body{margin:0;padding:0;background:#0b0e12;height:100%;overflow:hidden;
-    -webkit-user-select:none;user-select:none;touch-action:none;font-family:sans-serif}
+  :root{--acc:#76b900;--bg:#0d0f13;--pane:rgba(16,20,26,.92)}
+  html,body{margin:0;padding:0;background:var(--bg);height:100%;overflow:hidden;
+    -webkit-user-select:none;user-select:none;touch-action:none;
+    font-family:'Segoe UI',Roboto,sans-serif}
   #screen{position:absolute;inset:0}
-  #status{position:absolute;top:6px;left:50%;transform:translateX(-50%);
-    color:#9ad;font-size:11px;z-index:20;background:rgba(0,0,0,.55);
-    padding:2px 10px;border-radius:10px;white-space:nowrap}
-  #modebar{position:absolute;top:8px;left:8px;display:flex;gap:6px;z-index:40}
-  .tab{padding:6px 12px;border-radius:10px;border:1px solid #3af5;color:#cde;
-    background:rgba(30,45,70,.55);font-size:13px;-webkit-tap-highlight-color:transparent}
-  .tab.on{background:rgba(80,160,255,.8);color:#fff}
-  .btn{border-radius:14px;border:1px solid #3af3;background:rgba(40,60,90,.45);
-    color:#cde;font-weight:bold;display:flex;align-items:center;justify-content:center;
-    -webkit-tap-highlight-color:transparent}
-  .btn.on{background:rgba(80,160,255,.75);color:#fff}
-  /* quick game pads */
-  .pad{position:absolute;bottom:12px;z-index:10;display:grid;gap:10px}
-  #padL{left:12px;grid-template-columns:60px 60px}
-  #padR{right:12px;grid-template-columns:60px 60px}
-  .pad .btn{width:60px;height:60px;font-size:18px}
-  .pad .wide{grid-column:span 2;width:130px}
-  /* ======== full virtual keyboard ======== */
-  #vk{position:fixed;left:0;right:0;bottom:0;z-index:50;background:rgba(12,18,28,.97);
-    border-top:1px solid #3af5;padding:4px 4px 8px;display:none}
-  .vkrow{display:flex;gap:3px;margin-top:3px;justify-content:stretch}
-  .vk{flex:1;height:40px;border-radius:7px;border:1px solid #3af3;
-    background:rgba(45,65,95,.6);color:#dde;font-size:13px;font-weight:600;
-    display:flex;align-items:center;justify-content:center;
-    -webkit-tap-highlight-color:transparent;min-width:0;padding:0}
-  .vk.f{font-size:10px;height:30px}
-  .vk.mod.on,.vk.on{background:rgba(80,160,255,.85);color:#fff}
-  .vk.sp{flex:5}
-  .vk.w15{flex:1.5}.vk.w2{flex:2}
-  /* ======== gamepad mode ======== */
+  /* ---- GFN-style top bar (auto-hide) ---- */
+  #bar{position:fixed;top:0;left:0;right:0;height:44px;z-index:50;display:flex;
+    align-items:center;gap:4px;padding:0 8px;background:linear-gradient(rgba(0,0,0,.85),rgba(0,0,0,.4));
+    transition:transform .25s;}
+  #bar.hid{transform:translateY(-46px)}
+  #brand{color:#fff;font-weight:700;font-size:14px;margin-right:6px}
+  #brand b{color:var(--acc)}
+  .ib{width:38px;height:32px;border-radius:8px;border:1px solid #444;color:#ddd;
+    background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;
+    font-size:16px;-webkit-tap-highlight-color:transparent}
+  .ib.on{background:var(--acc);border-color:var(--acc);color:#000}
+  #stats{margin-left:auto;color:#9c9;font-size:11px;text-align:right;line-height:1.2}
+  /* pill — always visible, shows bar back */
+  #pill{position:fixed;top:6px;left:50%;transform:translateX(-50%);z-index:49;
+    width:46px;height:14px;border-radius:8px;background:rgba(118,185,0,.5);display:none}
+  /* ---- GFN-style virtual gamepad ---- */
   #gp{position:absolute;inset:0;z-index:10;pointer-events:none}
   #gp *{pointer-events:auto}
-  .stick{position:absolute;width:124px;height:124px;border-radius:50%;
-    border:2px solid #3af5;background:rgba(40,60,90,.3)}
-  .nub{position:absolute;left:50%;top:50%;width:52px;height:52px;border-radius:50%;
-    background:rgba(120,180,255,.8);transform:translate(-50%,-50%)}
-  #stickL{left:16px;bottom:66px}
-  #stickR{right:16px;bottom:66px}
-  .gbtn{position:absolute;width:52px;height:52px;border-radius:50%;font-size:16px}
-  #gp .cluster{position:absolute;right:22px;bottom:210px;width:160px;height:160px}
-  .gbtn.small{width:auto;height:30px;border-radius:8px;font-size:12px;padding:0 10px}
-  #gpstatus{position:absolute;bottom:6px;left:50%;transform:translateX(-50%);
-    color:#8fc;font-size:11px;z-index:25;background:rgba(0,0,0,.5);padding:2px 8px;border-radius:8px;white-space:nowrap}
-  /* ======== settings ======== */
-  #settings{position:fixed;top:50px;left:50%;transform:translateX(-50%);z-index:60;
-    background:rgba(14,20,30,.98);border:1px solid #3af5;border-radius:14px;
-    padding:16px;display:none;min-width:290px;max-width:92vw;color:#cde;font-size:14px}
-  #settings h3{margin:0 0 10px;color:#fff;font-size:15px}
-  #settings label{display:flex;align-items:center;gap:8px;padding:7px 4px}
-  #settings .hint{color:#89a;font-size:11px;margin:6px 0 0}
-  #gplist{margin:4px 0 0 26px;color:#8fc;font-size:12px}
+  .stick{position:absolute;width:128px;height:128px;border-radius:50%;
+    border:2px solid rgba(255,255,255,.35);background:rgba(255,255,255,.06)}
+  .nub{position:absolute;left:50%;top:50%;width:58px;height:58px;border-radius:50%;
+    background:rgba(255,255,255,.45);transform:translate(-50%,-50%)}
+  #stickL{left:18px;bottom:64px} #stickR{right:190px;bottom:34px;width:104px;height:104px}
+  .g{position:absolute;border-radius:50%;border:1.5px solid rgba(255,255,255,.4);
+    background:rgba(255,255,255,.10);color:#fff;font-weight:700;font-size:15px;
+    display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent}
+  .g.on{background:rgba(118,185,0,.75);border-color:var(--acc);color:#000}
+  #gp .abxy{position:absolute;right:16px;bottom:150px;width:158px;height:158px}
+  .abxy .g{width:52px;height:52px}
+  .dpad{position:absolute;left:170px;bottom:30px;width:132px;height:132px}
+  .dpad .g{width:44px;height:44px;border-radius:10px;font-size:13px}
+  .g.shoulder{border-radius:12px;width:64px;height:36px;font-size:13px}
+  .g.mid{border-radius:10px;width:52px;height:28px;font-size:11px}
+  /* ---- keyboard ---- */
+  #vk{position:fixed;left:0;right:0;bottom:0;z-index:55;background:var(--pane);
+    border-top:1px solid var(--acc);padding:4px 4px 8px;display:none}
+  .vkrow{display:flex;gap:3px;margin-top:3px}
+  .vk{flex:1;height:38px;border-radius:6px;border:1px solid #3a3f46;background:#1b2027;
+    color:#dde;font-size:13px;font-weight:600;display:flex;align-items:center;
+    justify-content:center;-webkit-tap-highlight-color:transparent;min-width:0}
+  .vk.f{font-size:10px;height:28px}
+  .vk.on{background:var(--acc);color:#000;border-color:var(--acc)}
+  .vk.sp{flex:5}.vk.w15{flex:1.5}.vk.w2{flex:2}
+  /* ---- settings drawer ---- */
+  #set{position:fixed;top:0;right:0;bottom:0;width:300px;max-width:85vw;z-index:60;
+    background:var(--pane);border-left:1px solid var(--acc);padding:14px;
+    transform:translateX(105%);transition:transform .25s;overflow-y:auto;color:#cde;font-size:13px}
+  #set.open{transform:none}
+  #set h3{color:#fff;font-size:14px;margin:14px 0 6px;border-bottom:1px solid #333;padding-bottom:4px}
+  #set h3:first-child{margin-top:0}
+  #set label{display:flex;align-items:center;gap:8px;padding:5px 2px}
+  .chip{display:inline-block;padding:6px 12px;margin:3px 4px 3px 0;border-radius:8px;
+    border:1px solid #444;background:#1b2027;color:#cde;font-size:12px}
+  .chip.on{background:var(--acc);color:#000;border-color:var(--acc)}
+  #set .hint{color:#789;font-size:11px;margin-top:4px}
+  #gplist{color:#8fc;font-size:11px;margin:4px 0}
+  input[type=range]{width:100%}
 </style>
 </head>
 <body>
 <div id="screen"></div>
-<div id="status">подключение…</div>
-<div id="modebar">
-  <div class="tab on" id="tabKb">⌨ Клава</div>
-  <div class="tab" id="tabGp">🎮 Геймпад</div>
-  <div class="tab" id="tabVk">⌨️ Клавиатура</div>
-  <div class="tab" id="tabSet">⚙</div>
+<div id="pill"></div>
+
+<div id="bar">
+  <span id="brand">NIMBUS<b>SEAT</b></span>
+  <div class="ib" id="bGp" title="геймпад">🎮</div>
+  <div class="ib" id="bKb" title="клавиатура">⌨</div>
+  <div class="ib" id="bEye" title="скрыть оверлеи">👁</div>
+  <div class="ib" id="bSet" title="настройки">⚙</div>
+  <div class="ib" id="bBar" title="спрятать панель">▲</div>
+  <div id="stats">—</div>
 </div>
 
-<!-- ============ SETTINGS ============ -->
-<div id="settings">
-  <h3>⚙ Источник геймпада</h3>
-  <label><input type="radio" name="gpsrc" value="virtual" checked> 📱 Виртуальный (экранные стики)</label>
-  <label><input type="radio" name="gpsrc" value="physical"> 🎮 Физический — Bluetooth / OTG</label>
+<!-- settings -->
+<div id="set">
+  <h3>🎮 Источник геймпада</h3>
+  <label><input type="radio" name="src" value="virtual" checked> Виртуальный (экранный)</label>
+  <label><input type="radio" name="src" value="physical"> Физический — Bluetooth / OTG</label>
   <div id="gplist">не обнаружен — нажмите кнопку на геймпаде</div>
-  <div class="hint">Bluetooth и OTG геймпады подключаются к телефону и видны браузеру одинаково — просто нажмите любую кнопку на геймпаде, он появится в списке. Оба транслируются в виртуальный Xbox 360 pad на сервере.</div>
-  <label style="margin-top:8px"><input type="checkbox" id="autosw" checked> Автопереключение на физический при подключении</label>
+  <label><input type="checkbox" id="autosw" checked> автопереключение на физический</label>
+  <div class="hint">BT и OTG геймпады браузер видит одинаково (Gamepad API). Оба идут в виртуальный Xbox 360 pad на сервере.</div>
+
+  <h3>🖥 Разрешение сервера</h3>
+  <div id="resChips">
+    <span class="chip" data-res="960x540">960×540</span>
+    <span class="chip on" data-res="1280x720">1280×720</span>
+    <span class="chip" data-res="1600x900">1600×900</span>
+    <span class="chip" data-res="1920x1080">1920×1080</span>
+  </div>
+  <h3>🎞 Частота кадров</h3>
+  <div id="fpsChips">
+    <span class="chip" data-fps="15">15</span>
+    <span class="chip on" data-fps="30">30</span>
+    <span class="chip" data-fps="60">60</span>
+  </div>
+  <div class="hint">Применение разрешения/FPS перезапустит рабочий стол сервера (~10 сек, игры перезапустятся).</div>
+  <span class="chip" id="applySrv" style="background:#2a4;color:#fff">✔ Применить на сервере</span>
+
+  <h3>📶 Качество потока (без перезапуска)</h3>
+  Качество JPEG <input type="range" id="qual" min="0" max="9" value="6">
+  Сжатие <input type="range" id="comp" min="0" max="9" value="2">
+
+  <h3>👁 Оверлеи</h3>
+  Прозрачность <input type="range" id="opac" min="15" max="100" value="65">
+  <label><input type="checkbox" id="hideOnPhys" checked> скрывать экранный геймпад при физическом</label>
 </div>
 
-<!-- ============ KEYBOARD / MOUSE quick-pads ============ -->
-<div id="kbui">
-  <div class="pad" id="padL">
-    <div class="btn wide" data-key="0xFF52">▲ Газ</div>
-    <div class="btn" data-key="0xFF51">◀</div>
-    <div class="btn" data-key="0xFF53">▶</div>
-    <div class="btn wide" data-key="0xFF54">▼ Назад</div>
-  </div>
-  <div class="pad" id="padR">
-    <div class="btn wide" data-key="0x0020">🔥 Огонь</div>
-    <div class="btn" data-key="0x006E">N₂O</div>
-    <div class="btn" data-key="0x0076">Дрифт</div>
-    <div class="btn wide" data-key="0x0062">👀 Назад</div>
-  </div>
-</div>
-
-<!-- ============ FULL VIRTUAL KEYBOARD ============ -->
-<div id="vk"></div>
-
-<!-- ============ GAMEPAD MODE ============ -->
-<div id="gp" style="display:none">
+<!-- GFN-style virtual gamepad -->
+<div id="gp">
   <div class="stick" id="stickL"><div class="nub"></div></div>
   <div class="stick" id="stickR"><div class="nub"></div></div>
-  <div class="cluster">
-    <div class="btn gbtn" data-gb="3" style="left:54px;top:0">Y</div>
-    <div class="btn gbtn" data-gb="2" style="left:0;top:54px">X</div>
-    <div class="btn gbtn" data-gb="1" style="left:108px;top:54px">B</div>
-    <div class="btn gbtn" data-gb="0" style="left:54px;top:108px">A</div>
+  <div class="dpad">
+    <div class="g" data-gb="12" style="left:44px;top:0">▲</div>
+    <div class="g" data-gb="14" style="left:0;top:44px">◀</div>
+    <div class="g" data-gb="15" style="left:88px;top:44px">▶</div>
+    <div class="g" data-gb="13" style="left:44px;top:88px">▼</div>
   </div>
-  <div class="btn gbtn small" data-gb="4" style="left:18px;bottom:220px">LB</div>
-  <div class="btn gbtn small" data-gb="6" style="left:18px;bottom:258px">LT</div>
-  <div class="btn gbtn small" data-gb="8" style="left:42%;top:46px">Back</div>
-  <div class="btn gbtn small" data-gb="9" style="left:56%;top:46px">Start</div>
-  <div class="btn gbtn small" data-gb="5" style="right:18px;bottom:420px">RB</div>
-  <div class="btn gbtn small" data-gb="7" style="right:18px;bottom:458px">RT</div>
-  <div id="gpstatus">🎮 виртуальный геймпад</div>
+  <div class="abxy">
+    <div class="g" data-gb="3" style="left:53px;top:0">Y</div>
+    <div class="g" data-gb="2" style="left:0;top:53px">X</div>
+    <div class="g" data-gb="1" style="left:106px;top:53px">B</div>
+    <div class="g" data-gb="0" style="left:53px;top:106px">A</div>
+  </div>
+  <div class="g shoulder" data-gb="4" style="left:16px;top:56px">LB</div>
+  <div class="g shoulder" data-gb="6" style="left:16px;top:100px">LT</div>
+  <div class="g shoulder" data-gb="5" style="right:16px;top:56px">RB</div>
+  <div class="g shoulder" data-gb="7" style="right:16px;top:100px">RT</div>
+  <div class="g mid" data-gb="8" style="left:calc(50% - 62px);top:56px">⧉</div>
+  <div class="g mid" data-gb="9" style="left:calc(50% + 10px);top:56px">☰</div>
 </div>
+
+<div id="vk"></div>
 
 <script type="module">
 import RFB from './core/rfb.js';
-
-const params = new URLSearchParams(location.search);
-const pw = params.get('pw') || '';
-const statusEl = document.getElementById('status');
+const P = new URLSearchParams(location.search);
+const pw = P.get('pw')||'', gpUrl = P.get('gp'), ctl = P.get('ctl');
+const $ = id => document.getElementById(id);
 
 /* ---------- VNC ---------- */
 let rfb;
-function connect() {
-  rfb = new RFB(document.getElementById('screen'),
-    `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/websockify`,
-    { credentials: { password: pw } });
-  rfb.scaleViewport = true;
-  rfb.background = '#0b0e12';
-  rfb.addEventListener('connect', () => statusEl.textContent = 'NimbusSeat — подключено');
-  rfb.addEventListener('disconnect', () => {
-    statusEl.textContent = 'отключено — переподключение…'; setTimeout(connect, 2000); });
+function connect(){
+  rfb = new RFB($('screen'), `${location.protocol==='https:'?'wss':'ws'}://${location.host}/websockify`,
+    {credentials:{password:pw}});
+  rfb.scaleViewport = true; rfb.background = '#0d0f13';
+  rfb.qualityLevel = +localStorage.q||6; rfb.compressionLevel = +localStorage.c||2;
+  rfb.addEventListener('connect', ()=>stat());
+  rfb.addEventListener('disconnect', ()=>{ stat('reconnect'); setTimeout(connect,2000); });
 }
 connect();
-const sendKey = (ks, down) => rfb && rfb.sendKey(ks, null, down);
-const tapKey = ks => { sendKey(ks, true); sendKey(ks, false); };
+const sendKey=(k,d)=>rfb&&rfb.sendKey(k,null,d);
+const tapKey=k=>{sendKey(k,true);sendKey(k,false);};
 
-/* ---------- gamepad bridge ws ---------- */
-const gpUrl = params.get('gp');
-let gws = null, gwsOpen = false;
-function gpConnect() {
-  if (!gpUrl) return;
-  gws = new WebSocket(gpUrl);
-  gws.onopen = () => { gwsOpen = true; gpStatus('🎮 мост геймпада подключён'); };
-  gws.onclose = () => { gwsOpen = false; setTimeout(gpConnect, 2000); };
+/* ---------- stats ---------- */
+let rtt='—';
+async function ping(){ if(!ctl) return;
+  const t=performance.now();
+  try{ await fetch(ctl+'/ping?key='+pw,{mode:'cors'}); rtt=Math.round(performance.now()-t)+' ms';}catch(e){rtt='—';}
 }
-gpConnect();
-const gpStatus = t => { const el = document.getElementById('gpstatus'); if (el) el.textContent = t; };
+setInterval(ping,4000); ping();
+function stat(s){ $('stats').innerHTML = (s==='reconnect'?'⟳ реконнект…':'● онлайн')+
+  `<br>ping ${rtt} | гп: ${gwsOpen?'✓':'✗'}`; }
+setInterval(()=>stat(),2000);
 
-const B = new Array(17).fill(0), A = [0,0,0,0,0,0];
-let dirty = false;
-setInterval(() => { if (dirty && gwsOpen) { gws.send(JSON.stringify({b:B,a:A})); dirty = false; } }, 33);
+/* ---------- gamepad ws ---------- */
+let gws=null, gwsOpen=false;
+function gpc(){ if(!gpUrl) return; gws=new WebSocket(gpUrl);
+  gws.onopen=()=>gwsOpen=true; gws.onclose=()=>{gwsOpen=false;setTimeout(gpc,2000);}; }
+gpc();
+const B=new Array(17).fill(0), A=[0,0,0,0,0,0]; let dirty=false;
+setInterval(()=>{ if(dirty&&gwsOpen){gws.send(JSON.stringify({b:B,a:A}));dirty=false;} },33);
 
-/* ---------- UI panels ---------- */
-const panels = { kb: document.getElementById('kbui'), gp: document.getElementById('gp') };
-const tabs = { kb: document.getElementById('tabKb'), gp: document.getElementById('tabGp') };
-function setMode(m) {
-  for (const k in panels) { panels[k].style.display = k === m ? '' : 'none'; tabs[k].classList.toggle('on', k === m); }
+/* ---------- top bar / overlay toggles ---------- */
+const bar=$('bar'), pill=$('pill'), gp=$('gp'), vk=$('vk'), set=$('set');
+let barTimer;
+function showBar(){ bar.classList.remove('hid'); pill.style.display='none';
+  clearTimeout(barTimer); barTimer=setTimeout(hideBar,6000); }
+function hideBar(){ bar.classList.add('hid'); pill.style.display='block'; }
+pill.onpointerup=showBar; showBar();
+$('bBar').onpointerup=hideBar;
+
+let gpVis=true, allHidden=false;
+$('bGp').onpointerup=()=>{ gpVis=!gpVis; sync(); };
+$('bKb').onpointerup=()=>{ vk.style.display = vk.style.display==='block'?'none':'block';
+  $('bKb').classList.toggle('on'); };
+$('bEye').onpointerup=()=>{ allHidden=!allHidden; $('bEye').classList.toggle('on',allHidden); sync(); };
+$('bSet').onpointerup=()=>{ set.classList.toggle('open'); $('bSet').classList.toggle('on'); };
+function sync(){
+  const hide = allHidden || !gpVis || (source==='physical' && $('hideOnPhys').checked);
+  gp.style.display = hide?'none':'';
+  $('bGp').classList.toggle('on', !hide);
+  if(allHidden){ vk.style.display='none'; $('bKb').classList.remove('on'); }
 }
-tabs.kb.onpointerup = () => setMode('kb');
-tabs.gp.onpointerup = () => setMode('gp');
 
-const vk = document.getElementById('vk');
-document.getElementById('tabVk').onpointerup = () => {
-  vk.style.display = vk.style.display === 'none' || !vk.style.display ? 'block' : 'none';
-  document.getElementById('tabVk').classList.toggle('on');
+/* ---------- overlay opacity ---------- */
+$('opac').oninput=e=>{ gp.style.opacity=e.target.value/100; localStorage.o=e.target.value; };
+if(localStorage.o){ $('opac').value=localStorage.o; gp.style.opacity=localStorage.o/100; }
+
+/* ---------- stream quality ---------- */
+$('qual').oninput=e=>{ localStorage.q=e.target.value; if(rfb) rfb.qualityLevel=+e.target.value; };
+$('comp').oninput=e=>{ localStorage.c=e.target.value; if(rfb) rfb.compressionLevel=+e.target.value; };
+if(localStorage.q)$('qual').value=localStorage.q; if(localStorage.c)$('comp').value=localStorage.c;
+
+/* ---------- server resolution / fps ---------- */
+function chips(id,attr){ for(const ch of $(id).children)
+  ch.onpointerup=()=>{ for(const x of $(id).children) x.classList.remove('on'); ch.classList.add('on'); }; }
+chips('resChips'); chips('fpsChips');
+$('applySrv').onpointerup=async()=>{
+  if(!ctl) return alert('control-канал недоступен');
+  const res=document.querySelector('#resChips .on').dataset.res.split('x');
+  const fps=document.querySelector('#fpsChips .on').dataset.fps;
+  $('applySrv').textContent='⏳ применяется…';
+  try{ await fetch(`${ctl}/resize?w=${res[0]}&h=${res[1]}&fps=${fps}&key=${pw}`,{mode:'cors'}); }catch(e){}
+  setTimeout(()=>$('applySrv').textContent='✔ Применить на сервере', 12000);
 };
-const settings = document.getElementById('settings');
-document.getElementById('tabSet').onpointerup = () => {
-  settings.style.display = settings.style.display === 'block' ? 'none' : 'block';
-  document.getElementById('tabSet').classList.toggle('on');
-};
 
-/* ---------- quick pads (data-key) ---------- */
-for (const btn of document.querySelectorAll('.btn[data-key]')) {
-  const ks = parseInt(btn.dataset.key, 16);
-  btn.addEventListener('pointerdown', e => { e.preventDefault(); btn.classList.add('on'); sendKey(ks, true); });
-  for (const ev of ['pointerup','pointercancel','pointerleave'])
-    btn.addEventListener(ev, e => { e.preventDefault(); btn.classList.remove('on'); sendKey(ks, false); });
-  btn.addEventListener('contextmenu', e => e.preventDefault());
+/* ---------- virtual gamepad ---------- */
+for(const b of document.querySelectorAll('.g[data-gb]')){
+  const i=+b.dataset.gb;
+  b.addEventListener('pointerdown',e=>{e.preventDefault();b.classList.add('on');
+    B[i]=1; if(i===6)A[4]=1; if(i===7)A[5]=1; dirty=true;});
+  for(const ev of ['pointerup','pointercancel','pointerleave'])
+    b.addEventListener(ev,e=>{e.preventDefault();b.classList.remove('on');
+      B[i]=0; if(i===6)A[4]=0; if(i===7)A[5]=0; dirty=true;});
+  b.addEventListener('contextmenu',e=>e.preventDefault());
 }
+function stick(el,ax,ay){ const nub=el.querySelector('.nub'); let pid=null;
+  const c=()=>{const r=el.getBoundingClientRect();return{cx:r.left+r.width/2,cy:r.top+r.height/2,rad:r.width/2};};
+  el.addEventListener('pointerdown',e=>{pid=e.pointerId;el.setPointerCapture(pid);mv(e);});
+  el.addEventListener('pointermove',e=>{if(e.pointerId===pid)mv(e);});
+  const end=e=>{if(e.pointerId!==pid)return;pid=null;A[ax]=0;A[ay]=0;dirty=true;
+    nub.style.transform='translate(-50%,-50%)';};
+  el.addEventListener('pointerup',end);el.addEventListener('pointercancel',end);
+  function mv(e){const{cx,cy,rad}=c();let dx=(e.clientX-cx)/rad,dy=(e.clientY-cy)/rad;
+    const m=Math.hypot(dx,dy);if(m>1){dx/=m;dy/=m;}
+    A[ax]=dx;A[ay]=dy;dirty=true;
+    nub.style.transform=`translate(calc(-50% + ${dx*36}px),calc(-50% + ${dy*36}px))`;}}
+stick($('stickL'),0,1); stick($('stickR'),2,3);
 
-/* ================= FULL VIRTUAL KEYBOARD ================= */
-const KS = { Esc:0xFF1B, Tab:0xFF09, Caps:0xFFE5, Shift:0xFFE1, Ctrl:0xFFE3, Alt:0xFFE9,
-  Win:0xFFEB, Enter:0xFF0D, Bksp:0xFF08, Del:0xFFFF, Home:0xFF50, End:0xFF57,
-  PgUp:0xFF55, PgDn:0xFF56, Up:0xFF52, Down:0xFF54, Left:0xFF51, Right:0xFF53, Space:0x20 };
-for (let i = 1; i <= 12; i++) KS['F'+i] = 0xFFBD + i;
+/* ---------- physical gamepad (BT/OTG) ---------- */
+let source='virtual', physIdx=null;
+for(const r of document.querySelectorAll('input[name=src]'))
+  r.addEventListener('change',()=>{source=r.value;apply();});
+function list(){ const p=[...navigator.getGamepads()].filter(Boolean);
+  $('gplist').textContent=p.length?p.map(g=>`#${g.index}: ${g.id.slice(0,40)}`).join(' | ')
+    :'не обнаружен — нажмите кнопку на геймпаде'; return p; }
+function apply(){ if(source==='physical'){const p=list();physIdx=p.length?p[0].index:null;}
+  else physIdx=null; sync(); }
+window.addEventListener('gamepadconnected',()=>{ list();
+  if($('autosw').checked){ source='physical';
+    document.querySelector('input[name=src][value=physical]').checked=true; apply(); }});
+window.addEventListener('gamepaddisconnected',()=>{list();apply();});
+setInterval(list,3000);
+(function poll(){ if(source==='physical'&&physIdx!==null){
+    const g=navigator.getGamepads()[physIdx];
+    if(g){ for(let i=0;i<17&&i<g.buttons.length;i++)B[i]=g.buttons[i].pressed?1:0;
+      A[0]=g.axes[0]||0;A[1]=g.axes[1]||0;A[2]=g.axes[2]||0;A[3]=g.axes[3]||0;
+      A[4]=g.buttons[6]?g.buttons[6].value:0;A[5]=g.buttons[7]?g.buttons[7].value:0;dirty=true;}}
+  requestAnimationFrame(poll); })();
 
-const shiftMap = {'`':'~','1':'!','2':'@','3':'#','4':'$','5':'%','6':'^','7':'&','8':'*',
-  '9':'(','0':')','-':'_','=':'+','[':'{',']':'}','\\':'|',';':':',"'":'"',',':'<','.':'>','/':'?'};
-
-const rows = [
-  ['Esc','F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12','Del'],
-  ['`','1','2','3','4','5','6','7','8','9','0','-','=','Bksp:w2'],
-  ['Tab:w15','q','w','e','r','t','y','u','i','o','p','[',']','\\'],
-  ['Caps:w15','a','s','d','f','g','h','j','k','l',';',"'",'Enter:w2'],
-  ['Shift:w2','z','x','c','v','b','n','m',',','.','/','Up','PgUp'],
-  ['Ctrl','Win','Alt','Space:sp','Home','End','Left','Down','Right','PgDn'],
-];
-
-let mods = { Shift:false, Ctrl:false, Alt:false, Win:false, Caps:false };
-
-function buildVK() {
-  vk.innerHTML = '';
-  for (const row of rows) {
-    const r = document.createElement('div'); r.className = 'vkrow';
-    for (const spec of row) {
-      const [name, cls] = spec.split(':');
-      const k = document.createElement('div');
-      k.className = 'vk' + (cls ? ' '+cls : '') + (name.match(/^F\d+$|^Esc$/) ? ' f' : '');
-      k.dataset.name = name;
-      k.textContent = label(name);
-      if (name in mods) k.classList.add('mod');
-      k.addEventListener('pointerdown', e => { e.preventDefault(); pressVK(name, k); });
-      k.addEventListener('contextmenu', e => e.preventDefault());
-      r.appendChild(k);
-    }
-    vk.appendChild(r);
-  }
-}
-function label(n) {
-  if (n.length === 1) {
-    if (mods.Shift) return shiftMap[n] || n.toUpperCase();
-    return mods.Caps && /[a-z]/.test(n) ? n.toUpperCase() : n;
-  }
-  return {Bksp:'⌫',Enter:'⏎ Enter',Space:'Space',Up:'↑',Down:'↓',Left:'←',Right:'→',Win:'❖'}[n] || n;
-}
-function refreshLabels() {
-  for (const k of vk.querySelectorAll('.vk')) {
-    k.textContent = label(k.dataset.name);
-    if (k.dataset.name in mods) k.classList.toggle('on', mods[k.dataset.name]);
-  }
-}
-function pressVK(name, el) {
-  if (name in mods) {                      // sticky modifiers
-    mods[name] = !mods[name];
-    if (name !== 'Caps') sendKey(KS[name], mods[name]);
-    else tapKey(KS.Caps);
-    refreshLabels(); return;
-  }
-  el.classList.add('on'); setTimeout(() => el.classList.remove('on'), 120);
-  if (name.length === 1) {
-    let ch = name;
-    if (mods.Shift) ch = shiftMap[name] || name.toUpperCase();
-    else if (mods.Caps && /[a-z]/.test(name)) ch = name.toUpperCase();
+/* ---------- full keyboard ---------- */
+const KS={Esc:0xFF1B,Tab:0xFF09,Caps:0xFFE5,Shift:0xFFE1,Ctrl:0xFFE3,Alt:0xFFE9,Win:0xFFEB,
+  Enter:0xFF0D,Bksp:0xFF08,Del:0xFFFF,Home:0xFF50,End:0xFF57,PgUp:0xFF55,PgDn:0xFF56,
+  Up:0xFF52,Down:0xFF54,Left:0xFF51,Right:0xFF53,Space:0x20};
+for(let i=1;i<=12;i++)KS['F'+i]=0xFFBD+i;
+const SH={'`':'~','1':'!','2':'@','3':'#','4':'$','5':'%','6':'^','7':'&','8':'*','9':'(','0':')',
+  '-':'_','=':'+','[':'{',']':'}','\\':'|',';':':',"'":'"',',':'<','.':'>','/':'?'};
+const rows=[
+ ['Esc','F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12','Del'],
+ ['`','1','2','3','4','5','6','7','8','9','0','-','=','Bksp:w2'],
+ ['Tab:w15','q','w','e','r','t','y','u','i','o','p','[',']','\\'],
+ ['Caps:w15','a','s','d','f','g','h','j','k','l',';',"'",'Enter:w2'],
+ ['Shift:w2','z','x','c','v','b','n','m',',','.','/','Up','PgUp'],
+ ['Ctrl','Win','Alt','Space:sp','Home','End','Left','Down','Right','PgDn']];
+let mods={Shift:false,Ctrl:false,Alt:false,Win:false,Caps:false};
+function lbl(n){ if(n.length===1){ if(mods.Shift)return SH[n]||n.toUpperCase();
+    return mods.Caps&&/[a-z]/.test(n)?n.toUpperCase():n; }
+  return {Bksp:'⌫',Enter:'⏎',Space:'Space',Up:'↑',Down:'↓',Left:'←',Right:'→',Win:'❖'}[n]||n; }
+for(const row of rows){ const r=document.createElement('div');r.className='vkrow';
+  for(const spec of row){ const[n,cls]=spec.split(':');
+    const k=document.createElement('div');
+    k.className='vk'+(cls?' '+cls:'')+(/^F\d+$|^Esc$/.test(n)?' f':'');
+    k.dataset.n=n;k.textContent=lbl(n);
+    k.addEventListener('pointerdown',e=>{e.preventDefault();press(n,k);});
+    k.addEventListener('contextmenu',e=>e.preventDefault());
+    r.appendChild(k);} vk.appendChild(r); }
+function refresh(){ for(const k of vk.querySelectorAll('.vk')){k.textContent=lbl(k.dataset.n);
+  if(k.dataset.n in mods)k.classList.toggle('on',mods[k.dataset.n]);} }
+function press(n,el){
+  if(n in mods){ mods[n]=!mods[n];
+    if(n!=='Caps')sendKey(KS[n],mods[n]); else tapKey(KS.Caps); refresh(); return; }
+  el.classList.add('on'); setTimeout(()=>el.classList.remove('on'),120);
+  if(n.length===1){ let ch=n;
+    if(mods.Shift)ch=SH[n]||n.toUpperCase();
+    else if(mods.Caps&&/[a-z]/.test(n))ch=n.toUpperCase();
     tapKey(ch.charCodeAt(0));
-    if (mods.Shift) { mods.Shift = false; sendKey(KS.Shift, false); refreshLabels(); }
-  } else {
-    tapKey(KS[name]);
-  }
-}
-buildVK();
-
-/* ================= GAMEPAD ================= */
-for (const btn of document.querySelectorAll('.btn[data-gb]')) {
-  const i = parseInt(btn.dataset.gb, 10);
-  btn.addEventListener('pointerdown', e => { e.preventDefault(); btn.classList.add('on');
-    B[i] = 1; if (i===6) A[4]=1; if (i===7) A[5]=1; dirty = true; });
-  for (const ev of ['pointerup','pointercancel','pointerleave'])
-    btn.addEventListener(ev, e => { e.preventDefault(); btn.classList.remove('on');
-      B[i] = 0; if (i===6) A[4]=0; if (i===7) A[5]=0; dirty = true; });
-  btn.addEventListener('contextmenu', e => e.preventDefault());
-}
-function makeStick(el, ax, ay) {
-  const nub = el.querySelector('.nub'); let pid = null;
-  const c = () => { const r = el.getBoundingClientRect();
-    return { cx: r.left+r.width/2, cy: r.top+r.height/2, rad: r.width/2 }; };
-  el.addEventListener('pointerdown', e => { pid = e.pointerId; el.setPointerCapture(pid); mv(e); });
-  el.addEventListener('pointermove', e => { if (e.pointerId === pid) mv(e); });
-  const end = e => { if (e.pointerId !== pid) return; pid = null;
-    A[ax]=0; A[ay]=0; dirty = true; nub.style.transform = 'translate(-50%,-50%)'; };
-  el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
-  function mv(e) {
-    const {cx,cy,rad} = c();
-    let dx = (e.clientX-cx)/rad, dy = (e.clientY-cy)/rad;
-    const m = Math.hypot(dx,dy); if (m > 1) { dx/=m; dy/=m; }
-    A[ax]=dx; A[ay]=dy; dirty = true;
-    nub.style.transform = `translate(calc(-50% + ${dx*34}px), calc(-50% + ${dy*34}px))`;
-  }
-}
-makeStick(document.getElementById('stickL'), 0, 1);
-makeStick(document.getElementById('stickR'), 2, 3);
-
-/* ---------- gamepad source selection ---------- */
-let source = 'virtual';         // 'virtual' | 'physical'
-let physIdx = null;
-const gplist = document.getElementById('gplist');
-for (const r of document.querySelectorAll('input[name=gpsrc]'))
-  r.addEventListener('change', () => { source = r.value; applySource(); });
-function listPads() {
-  const pads = [...navigator.getGamepads()].filter(Boolean);
-  gplist.textContent = pads.length
-    ? pads.map(g => `#${g.index}: ${g.id.slice(0,42)}`).join('  |  ')
-    : 'не обнаружен — нажмите кнопку на геймпаде';
-  return pads;
-}
-function applySource() {
-  if (source === 'physical') {
-    const pads = listPads();
-    physIdx = pads.length ? pads[0].index : null;
-    gpStatus(physIdx !== null ? `🎮 физический геймпад #${physIdx}` : 'подключите геймпад (BT/OTG) и нажмите кнопку');
-  } else { physIdx = null; gpStatus('🎮 виртуальный геймпад'); }
-}
-window.addEventListener('gamepadconnected', e => {
-  listPads();
-  if (document.getElementById('autosw').checked) {
-    source = 'physical';
-    document.querySelector('input[name=gpsrc][value=physical]').checked = true;
-    applySource(); setMode('gp');
-  }
-});
-window.addEventListener('gamepaddisconnected', () => { listPads(); applySource(); });
-setInterval(listPads, 3000);
-
-function pollReal() {
-  if (source === 'physical' && physIdx !== null) {
-    const g = navigator.getGamepads()[physIdx];
-    if (g) {
-      for (let i = 0; i < 17 && i < g.buttons.length; i++) B[i] = g.buttons[i].pressed ? 1 : 0;
-      A[0]=g.axes[0]||0; A[1]=g.axes[1]||0; A[2]=g.axes[2]||0; A[3]=g.axes[3]||0;
-      A[4]=g.buttons[6]?g.buttons[6].value:0; A[5]=g.buttons[7]?g.buttons[7].value:0;
-      dirty = true;
-    }
-  }
-  requestAnimationFrame(pollReal);
-}
-requestAnimationFrame(pollReal);
+    if(mods.Shift){mods.Shift=false;sendKey(KS.Shift,false);refresh();} }
+  else tapKey(KS[n]); }
+sync();
 </script>
 </body>
 </html>
