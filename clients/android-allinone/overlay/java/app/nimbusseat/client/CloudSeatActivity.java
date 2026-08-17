@@ -14,6 +14,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
+import android.webkit.WebChromeClient;
 import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.EditText;
@@ -48,11 +49,29 @@ public class CloudSeatActivity extends Activity {
     private TextView status;
     private WebView web;
     private LinearLayout controls;
+    private Button toggle;
+    private boolean controlsExpanded = true;
     private String liveUrl = null;
+
+    /** Collapse the button panel to a thin strip once the stream is open. */
+    private void setPanel(boolean expand) {
+        for (int i = 0; i < controls.getChildCount(); i++) {
+            View c = controls.getChildAt(i);
+            if (c != toggle && c != status) c.setVisibility(expand ? View.VISIBLE : View.GONE);
+        }
+        status.setVisibility(expand ? View.VISIBLE : View.GONE);
+        if (toggle != null) toggle.setText(expand ? "▲ Скрыть панель" : "▼ Панель");
+    }
 
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
+        getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        getWindow().getDecorView().setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                | View.SYSTEM_UI_FLAG_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
 
         LinearLayout root = new LinearLayout(this);
@@ -88,8 +107,13 @@ public class CloudSeatActivity extends Activity {
         cfg.setOnClickListener(v -> showConfig());
         controls.addView(cfg, lp());
 
+        toggle = btn("▲ Скрыть панель");
+        toggle.setOnClickListener(v -> setPanel(controlsExpanded = !controlsExpanded));
+        controls.addView(toggle, lp());
+
         root.addView(controls, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 0, 0));
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT));
 
         web = new WebView(this);
         configureWeb();
@@ -125,6 +149,7 @@ public class CloudSeatActivity extends Activity {
         s.setLoadWithOverviewMode(true);
         web.setBackgroundColor(Color.BLACK);
         web.setWebViewClient(new WebViewClient());
+        web.setWebChromeClient(new WebChromeClient());
     }
 
     private String repo()  { return prefs.getString("repo", "sj0404-collab/NimbusSeat-Runner"); }
@@ -238,7 +263,8 @@ public class CloudSeatActivity extends Activity {
                         && !s.optString("url").equals(prev)) {
                     final String url = s.optString("url");
                     liveUrl = url;
-                    ui.post(() -> { status.setText("✅ Подключено — ПК активирован"); web.loadUrl(url); });
+                    ui.post(() -> { status.setText("✅ Подключено — ПК активирован");
+                        web.loadUrl(url); setPanel(controlsExpanded = false); });
                     return;
                 }
             }
@@ -267,6 +293,7 @@ public class CloudSeatActivity extends Activity {
                     status.setText("✅ Сессия live: " + s.optString("resolution")
                             + " @ " + s.optInt("fps") + "fps");
                     web.loadUrl(liveUrl);
+                    setPanel(controlsExpanded = false);
                 } else if (loud) {
                     Toast.makeText(this, "Сессия не запущена — нажмите «Запустить раннер»",
                             Toast.LENGTH_LONG).show();
