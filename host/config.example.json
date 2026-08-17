@@ -1,0 +1,30 @@
+{
+  "session": {
+    "max_duration_minutes": 360,
+    "warn_at_minutes_left": [30, 10, 5],
+    "grace_period_seconds": 60,
+    "cooldown_minutes": 15
+  },
+  "network": {
+    "lan_subnets": ["192.168.0.0/16", "10.0.0.0/8", "172.16.0.0/12"],
+    "api_port": 48120,
+    "discovery_port": 48121,
+    "discovery_interval_seconds": 3
+  },
+  "duo": {
+    "install_dir": "C:/Program Files/Duo",
+    "executable": "C:/Program Files/Duo/duo.exe",
+    "service_name": "DuoService",
+    "web_ui": "https://localhost:47990",
+    "stream_ports": [47984, 47989, 47990, 47998, 47999, 48000, 48002, 48010]
+  },
+  "aster": {
+    "enabled": true,
+    "astctl": "C:/Program Files/ASTER/astctl.exe",
+    "guest_seat_id": 2
+  },
+  "audio": {
+    "guest_device_hint": "Steam Streaming Speakers"
+  },
+  "host_name": "NimbusSeat Host"
+}

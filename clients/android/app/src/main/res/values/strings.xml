@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">NimbusSeat</string>
+    <string name="searching">Поиск хоста в локальной сети…</string>
+    <string name="play">Играть</string>
+    <string name="stop">Завершить сессию</string>
+    <string name="rescan">Обновить</string>
+</resources>

@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+config.json
+*.log
+logs/
+# Android
+clients/android/.gradle/
+clients/android/build/
+clients/android/app/build/
+clients/android/local.properties
+clients/android/.idea/
+*.apk
+*.keystore
