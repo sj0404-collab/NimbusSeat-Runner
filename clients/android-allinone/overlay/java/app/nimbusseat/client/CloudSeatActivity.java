@@ -49,18 +49,13 @@ public class CloudSeatActivity extends Activity {
     private TextView status;
     private WebView web;
     private LinearLayout controls;
-    private Button toggle;
     private boolean controlsExpanded = true;
     private String liveUrl = null;
 
-    /** Collapse the button panel to a thin strip once the stream is open. */
+    /** Show/hide the whole control panel; hidden => stream is fullscreen. */
     private void setPanel(boolean expand) {
-        for (int i = 0; i < controls.getChildCount(); i++) {
-            View c = controls.getChildAt(i);
-            if (c != toggle && c != status) c.setVisibility(expand ? View.VISIBLE : View.GONE);
-        }
-        status.setVisibility(expand ? View.VISIBLE : View.GONE);
-        if (toggle != null) toggle.setText(expand ? "▲ Скрыть панель" : "▼ Панель");
+        controlsExpanded = expand;
+        controls.setVisibility(expand ? View.VISIBLE : View.GONE);
     }
 
     @Override
@@ -88,7 +83,7 @@ public class CloudSeatActivity extends Activity {
         status.setTextColor(Color.WHITE);
         status.setTextSize(15);
         status.setGravity(Gravity.CENTER);
-        status.setText("Облачное место (GitHub-раннер)");
+        status.setText("Облачное место. Кнопка Назад показывает/прячет эту панель.");
         controls.addView(status, lp());
 
         Button start = btn("▶ Запустить раннер");
@@ -106,10 +101,6 @@ public class CloudSeatActivity extends Activity {
         Button cfg = btn("⚙ Repo / токен");
         cfg.setOnClickListener(v -> showConfig());
         controls.addView(cfg, lp());
-
-        toggle = btn("▲ Скрыть панель");
-        toggle.setOnClickListener(v -> setPanel(controlsExpanded = !controlsExpanded));
-        controls.addView(toggle, lp());
 
         root.addView(controls, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -264,7 +255,7 @@ public class CloudSeatActivity extends Activity {
                     final String url = s.optString("url");
                     liveUrl = url;
                     ui.post(() -> { status.setText("✅ Подключено — ПК активирован");
-                        web.loadUrl(url); setPanel(controlsExpanded = false); });
+                        web.loadUrl(url); setPanel(false); });
                     return;
                 }
             }
@@ -293,7 +284,7 @@ public class CloudSeatActivity extends Activity {
                     status.setText("✅ Сессия live: " + s.optString("resolution")
                             + " @ " + s.optInt("fps") + "fps");
                     web.loadUrl(liveUrl);
-                    setPanel(controlsExpanded = false);
+                    setPanel(false);
                 } else if (loud) {
                     Toast.makeText(this, "Сессия не запущена — нажмите «Запустить раннер»",
                             Toast.LENGTH_LONG).show();
@@ -302,8 +293,21 @@ public class CloudSeatActivity extends Activity {
         }).start();
     }
 
+    private long lastBack = 0;
+
     @Override
     public void onBackPressed() {
-        if (web.canGoBack()) web.goBack(); else super.onBackPressed();
+        // Первое нажатие «Назад» — переключить панель управления,
+        // быстрое двойное — выйти из активности.
+        long now = System.currentTimeMillis();
+        if (now - lastBack < 1500) {
+            super.onBackPressed();
+            return;
+        }
+        lastBack = now;
+        setPanel(!controlsExpanded);
+        Toast.makeText(this, controlsExpanded
+                ? "Панель показана. Двойное «Назад» — выход"
+                : "Стрим на весь экран. «Назад» — панель", Toast.LENGTH_SHORT).show();
     }
 }

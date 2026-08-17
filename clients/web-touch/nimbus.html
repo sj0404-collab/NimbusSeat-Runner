@@ -2,65 +2,68 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>NimbusSeat</title>
 <style>
-  :root{--acc:#76b900;--bg:#0d0f13;--pane:rgba(14,18,24,.96)}
-  html,body{margin:0;padding:0;background:var(--bg);height:100%;overflow:hidden;
+  :root{--acc:#76b900;--pane:rgba(14,18,24,.94)}
+  html,body{margin:0;padding:0;background:#000;height:100%;overflow:hidden;
     -webkit-user-select:none;user-select:none;touch-action:none;
     font-family:'Segoe UI',Roboto,sans-serif}
-  /* screen fills space under the bar */
-  #screen{position:absolute;top:40px;left:0;right:0;bottom:0}
-  /* ---- top bar: ALWAYS visible, thin ---- */
-  #bar{position:fixed;top:0;left:0;right:0;height:40px;z-index:50;display:flex;
-    align-items:center;gap:5px;padding:0 6px;background:#14181e;border-bottom:1px solid #2a2f36}
-  #brand{color:#fff;font-weight:700;font-size:12px;margin-right:4px}
-  #brand b{color:var(--acc)}
-  .ib{min-width:44px;height:30px;border-radius:8px;border:1px solid #444;color:#ddd;
-    background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;
-    font-size:15px;padding:0 6px;-webkit-tap-highlight-color:transparent}
-  .ib.on{background:var(--acc);border-color:var(--acc);color:#000}
-  #stats{margin-left:auto;color:#9c9;font-size:10px;text-align:right;line-height:1.15}
-  /* ---- virtual gamepad: compact, non-overlapping, % based ---- */
-  #gp{position:absolute;top:40px;left:0;right:0;bottom:0;z-index:10;pointer-events:none}
+  /* stream = ENTIRE screen */
+  #screen{position:absolute;inset:0}
+  /* ---- floating action button (draggable, like GFN) ---- */
+  #fab{position:fixed;z-index:70;width:46px;height:46px;border-radius:50%;
+    background:rgba(20,26,32,.75);border:1.5px solid var(--acc);
+    display:flex;align-items:center;justify-content:center;color:var(--acc);
+    font-weight:800;font-size:13px;box-shadow:0 2px 10px rgba(0,0,0,.6);
+    top:10px;right:10px;-webkit-tap-highlight-color:transparent}
+  #menu{position:fixed;z-index:69;display:none;flex-direction:column;gap:8px;
+    background:var(--pane);border:1px solid #333;border-radius:14px;padding:10px}
+  .mi{display:flex;align-items:center;gap:10px;color:#dde;font-size:14px;
+    padding:8px 12px;border-radius:10px;border:1px solid #3a3f46;background:#1a1f26;
+    -webkit-tap-highlight-color:transparent;white-space:nowrap}
+  .mi.on{background:var(--acc);color:#000;border-color:var(--acc)}
+  .mi small{color:#8a9;margin-left:auto}
+  /* ---- gamepad ---- */
+  #gp{position:absolute;inset:0;z-index:10;pointer-events:none}
   #gp *{pointer-events:auto}
-  .stick{position:absolute;width:26vmin;height:26vmin;max-width:150px;max-height:150px;
-    border-radius:50%;border:2px solid rgba(255,255,255,.4);background:rgba(255,255,255,.07)}
+  .stick{position:absolute;width:24vmin;height:24vmin;max-width:140px;max-height:140px;
+    border-radius:50%;border:2px solid rgba(255,255,255,.35);background:rgba(255,255,255,.06)}
   .nub{position:absolute;left:50%;top:50%;width:44%;height:44%;border-radius:50%;
-    background:rgba(255,255,255,.5);transform:translate(-50%,-50%)}
-  #stickL{left:2%;bottom:3%}
-  #stickR{right:2%;bottom:3%}
-  .g{position:absolute;border-radius:50%;border:1.5px solid rgba(255,255,255,.45);
-    background:rgba(255,255,255,.12);color:#fff;font-weight:700;
+    background:rgba(255,255,255,.45);transform:translate(-50%,-50%)}
+  #stickL{left:2%;bottom:4%}
+  #stickR{right:2%;bottom:4%}
+  .g{position:absolute;border-radius:50%;border:1.5px solid rgba(255,255,255,.4);
+    background:rgba(255,255,255,.10);color:#fff;font-weight:700;
     display:flex;align-items:center;justify-content:center;
     -webkit-tap-highlight-color:transparent}
   .g.on{background:rgba(118,185,0,.8);border-color:var(--acc);color:#000}
-  /* ABXY: above right stick */
-  .abxy{position:absolute;right:2%;bottom:calc(3% + 27vmin);width:24vmin;height:24vmin;
-    max-width:140px;max-height:140px}
-  .abxy .g{width:38%;height:38%;font-size:2.4vmin}
-  /* dpad: above left stick */
-  .dpad{position:absolute;left:2%;bottom:calc(3% + 27vmin);width:22vmin;height:22vmin;
-    max-width:130px;max-height:130px}
-  .dpad .g{width:36%;height:36%;border-radius:22%;font-size:2vmin}
-  /* shoulders: vertical stacks at screen edges, middle height */
-  .g.sh{border-radius:10px;width:11vmin;height:5.5vmin;max-width:64px;max-height:32px;font-size:1.9vmin}
-  #lb{left:2%;top:16%} #lt{left:2%;top:calc(16% + 6.5vmin)}
-  #rb{right:2%;top:16%} #rt{right:2%;top:calc(16% + 6.5vmin)}
-  .g.mid{border-radius:8px;width:9vmin;height:4.5vmin;max-width:52px;max-height:26px;font-size:1.9vmin}
-  #bk{left:calc(50% - 10vmin);top:2%} #st{left:calc(50% + 1vmin);top:2%}
-  /* ---- keyboard ---- */
-  #vk{position:fixed;left:0;right:0;bottom:0;z-index:55;background:var(--pane);
-    border-top:1px solid var(--acc);padding:3px 3px 6px;display:none}
+  .abxy{position:absolute;right:2%;bottom:calc(6% + 24vmin);width:21vmin;height:21vmin;
+    max-width:125px;max-height:125px}
+  .abxy .g{width:38%;height:38%;font-size:2.2vmin}
+  .dpad{position:absolute;left:2%;bottom:calc(6% + 24vmin);width:20vmin;height:20vmin;
+    max-width:120px;max-height:120px}
+  .dpad .g{width:36%;height:36%;border-radius:22%;font-size:1.8vmin}
+  .g.sh{border-radius:9px;width:10vmin;height:5vmin;max-width:58px;max-height:28px;font-size:1.8vmin}
+  #lb{left:2%;top:14%} #lt{left:2%;top:calc(14% + 6vmin)}
+  #rb{right:2%;top:14%} #rt{right:2%;top:calc(14% + 6vmin)}
+  .g.mid{border-radius:7px;width:8vmin;height:4vmin;max-width:46px;max-height:22px;font-size:1.7vmin}
+  #bk{left:calc(50% - 9vmin);top:1.5%} #st{left:calc(50% + 1vmin);top:1.5%}
+  /* ---- compact translucent keyboard ---- */
+  #vk{position:fixed;left:0;right:0;bottom:0;z-index:55;background:rgba(10,14,18,.82);
+    border-top:1px solid var(--acc);padding:2px 2px 4px;display:none}
   .vkrow{display:flex;gap:2px;margin-top:2px}
-  .vk{flex:1;height:36px;border-radius:5px;border:1px solid #3a3f46;background:#1b2027;
-    color:#dde;font-size:12px;font-weight:600;display:flex;align-items:center;
-    justify-content:center;-webkit-tap-highlight-color:transparent;min-width:0}
-  .vk.f{font-size:9px;height:26px}
+  .vk{flex:1;height:8.5vh;max-height:38px;border-radius:5px;border:1px solid rgba(80,90,100,.5);
+    background:rgba(30,36,44,.75);color:#eee;font-size:12px;font-weight:600;
+    display:flex;align-items:center;justify-content:center;
+    -webkit-tap-highlight-color:transparent;min-width:0}
   .vk.on{background:var(--acc);color:#000;border-color:var(--acc)}
   .vk.sp{flex:5}.vk.w15{flex:1.5}.vk.w2{flex:2}
-  /* ---- settings drawer ---- */
-  #set{position:fixed;top:40px;right:0;bottom:0;width:300px;max-width:88vw;z-index:60;
+  #vkbar{display:flex;justify-content:space-between;align-items:center;padding:1px 6px}
+  #vkbar span{color:#9c9;font-size:10px}
+  #vkclose{color:#fff;background:#333;border-radius:6px;padding:2px 12px;font-size:12px}
+  /* ---- settings ---- */
+  #set{position:fixed;top:0;right:0;bottom:0;width:300px;max-width:88vw;z-index:60;
     background:var(--pane);border-left:1px solid var(--acc);padding:12px;
     transform:translateX(105%);transition:transform .25s;overflow-y:auto;color:#cde;font-size:13px}
   #set.open{transform:none}
@@ -70,56 +73,52 @@
   .chip{display:inline-block;padding:6px 11px;margin:3px 4px 3px 0;border-radius:8px;
     border:1px solid #444;background:#1b2027;color:#cde;font-size:12px}
   .chip.on{background:var(--acc);color:#000;border-color:var(--acc)}
+  .chip.act{background:#2a4;color:#fff}
   #set .hint{color:#789;font-size:10px;margin-top:3px}
   #gplist{color:#8fc;font-size:10px;margin:3px 0}
   input[type=range]{width:100%}
 </style>
 </head>
 <body>
-<div id="bar">
-  <span id="brand">NIMBUS<b>SEAT</b></span>
-  <div class="ib on" id="bMouse" title="мышь">🖱</div>
-  <div class="ib" id="bGp" title="геймпад">🎮</div>
-  <div class="ib" id="bKb" title="клавиатура">⌨</div>
-  <div class="ib" id="bSet" title="настройки">⚙</div>
-  <div id="stats">—</div>
-</div>
 <div id="screen"></div>
 
-<!-- settings -->
-<div id="set">
-  <h3>🎮 Источник геймпада</h3>
-  <label><input type="radio" name="src" value="virtual" checked> Виртуальный (экранный)</label>
-  <label><input type="radio" name="src" value="physical"> Физический — Bluetooth / OTG</label>
-  <div id="gplist">не обнаружен — нажмите кнопку на геймпаде</div>
-  <label><input type="checkbox" id="autosw" checked> автопереключение на физический</label>
-  <div class="hint">При физическом геймпаде экранный скрывается — экран остаётся мышью.</div>
+<div id="fab">NS</div>
+<div id="menu">
+  <div class="mi on" id="mMouse">🖱 Мышь <small>тап = клик</small></div>
+  <div class="mi" id="mGp">🎮 Геймпад</div>
+  <div class="mi" id="mKb">⌨ Клавиатура</div>
+  <div class="mi" id="mSet">⚙ Настройки <small id="mPing">—</small></div>
+</div>
 
-  <h3>🖥 Разрешение сервера</h3>
-  <div id="resChips">
+<div id="set">
+  <h3>📐 Экран</h3>
+  <span class="chip act" id="fit">Подогнать под мой экран</span>
+  <div class="hint">Подбирает разрешение сервера под пропорции телефона — стрим займёт весь экран (перезапуск ~10 сек).</div>
+  <div id="resChips" style="margin-top:6px">
     <span class="chip" data-res="960x540">960×540</span>
     <span class="chip on" data-res="1280x720">1280×720</span>
     <span class="chip" data-res="1600x900">1600×900</span>
     <span class="chip" data-res="1920x1080">1920×1080</span>
   </div>
-  <h3>🎞 Частота кадров</h3>
   <div id="fpsChips">
-    <span class="chip" data-fps="15">15</span>
-    <span class="chip on" data-fps="30">30</span>
-    <span class="chip" data-fps="60">60</span>
+    <span class="chip" data-fps="15">15 fps</span>
+    <span class="chip on" data-fps="30">30 fps</span>
+    <span class="chip" data-fps="60">60 fps</span>
   </div>
-  <div class="hint">Применение перезапустит рабочий стол сервера (~10 сек).</div>
-  <span class="chip" id="applySrv" style="background:#2a4;color:#fff">✔ Применить на сервере</span>
+  <span class="chip act" id="applySrv">✔ Применить</span>
 
-  <h3>📶 Качество потока (сразу)</h3>
-  Качество JPEG <input type="range" id="qual" min="0" max="9" value="6">
+  <h3>🎮 Геймпад</h3>
+  <label><input type="radio" name="src" value="virtual" checked> Виртуальный (экранный)</label>
+  <label><input type="radio" name="src" value="physical"> Bluetooth / OTG</label>
+  <div id="gplist">нажмите кнопку на геймпаде</div>
+  <label><input type="checkbox" id="autosw" checked> автопереключение</label>
+  Прозрачность оверлея <input type="range" id="opac" min="15" max="100" value="60">
+
+  <h3>📶 Поток (сразу)</h3>
+  Качество <input type="range" id="qual" min="0" max="9" value="6">
   Сжатие <input type="range" id="comp" min="0" max="9" value="2">
-
-  <h3>🎛 Оверлей геймпада</h3>
-  Прозрачность <input type="range" id="opac" min="15" max="100" value="65">
 </div>
 
-<!-- virtual gamepad -->
 <div id="gp" style="display:none">
   <div class="g sh" data-gb="4" id="lb">LB</div>
   <div class="g sh" data-gb="6" id="lt">LT</div>
@@ -143,7 +142,9 @@
   <div class="stick" id="stickR"><div class="nub"></div></div>
 </div>
 
-<div id="vk"></div>
+<div id="vk">
+  <div id="vkbar"><span>липкие Shift/Ctrl/Alt</span><div id="vkclose">✕ закрыть</div></div>
+</div>
 
 <script type="module">
 import RFB from './core/rfb.js';
@@ -156,7 +157,7 @@ let rfb;
 function connect(){
   rfb = new RFB($('screen'), `${location.protocol==='https:'?'wss':'ws'}://${location.host}/websockify`,
     {credentials:{password:pw}});
-  rfb.scaleViewport = true; rfb.background = '#0d0f13';
+  rfb.scaleViewport = true; rfb.background = '#000';
   rfb.qualityLevel = +localStorage.q||6; rfb.compressionLevel = +localStorage.c||2;
   rfb.addEventListener('disconnect', ()=>setTimeout(connect,2000));
 }
@@ -164,14 +165,14 @@ connect();
 const sendKey=(k,d)=>rfb&&rfb.sendKey(k,null,d);
 const tapKey=k=>{sendKey(k,true);sendKey(k,false);};
 
-/* ---------- stats ---------- */
+/* ---------- ping ---------- */
 let rtt='—';
 async function ping(){ if(!ctl) return;
   const t=performance.now();
   try{ await fetch(ctl+'/ping?key='+pw,{mode:'cors'}); rtt=Math.round(performance.now()-t)+'ms';}catch(e){rtt='—';}
+  $('mPing').textContent=rtt;
 }
 setInterval(ping,5000); ping();
-setInterval(()=>{ $('stats').innerHTML=`ping ${rtt}<br>гп ${gwsOpen?'✓':'✗'}`; },2000);
 
 /* ---------- gamepad ws ---------- */
 let gws=null, gwsOpen=false;
@@ -181,30 +182,62 @@ gpc();
 const B=new Array(17).fill(0), A=[0,0,0,0,0,0]; let dirty=false;
 setInterval(()=>{ if(dirty&&gwsOpen){gws.send(JSON.stringify({b:B,a:A}));dirty=false;} },33);
 
-/* ---------- modes: mouse (default) / gamepad ---------- */
+/* ---------- FAB + menu ---------- */
+const fab=$('fab'), menu=$('menu');
+let fdrag=null, moved=false, menuOpen=false;
+fab.addEventListener('pointerdown',e=>{ fdrag={x:e.clientX,y:e.clientY,
+  fx:fab.offsetLeft,fy:fab.offsetTop}; moved=false; fab.setPointerCapture(e.pointerId); });
+fab.addEventListener('pointermove',e=>{ if(!fdrag) return;
+  const dx=e.clientX-fdrag.x, dy=e.clientY-fdrag.y;
+  if(Math.hypot(dx,dy)>8) moved=true;
+  if(moved){ fab.style.left=Math.max(0,Math.min(innerWidth-48,fdrag.fx+dx))+'px';
+    fab.style.top=Math.max(0,Math.min(innerHeight-48,fdrag.fy+dy))+'px';
+    fab.style.right='auto'; placeMenu(); }});
+fab.addEventListener('pointerup',()=>{ if(!moved) toggleMenu(); fdrag=null; });
+function placeMenu(){
+  const r=fab.getBoundingClientRect();
+  menu.style.top=Math.min(innerHeight-menu.offsetHeight-8, r.bottom+6)+'px';
+  if(r.left>innerWidth/2){ menu.style.left='auto'; menu.style.right=(innerWidth-r.right)+'px'; }
+  else { menu.style.right='auto'; menu.style.left=r.left+'px'; }
+}
+function toggleMenu(){ menuOpen=!menuOpen; menu.style.display=menuOpen?'flex':'none';
+  if(menuOpen){ placeMenu(); clearTimeout(menu._t); menu._t=setTimeout(()=>{menuOpen=false;menu.style.display='none';},6000); } }
+function closeMenu(){ menuOpen=false; menu.style.display='none'; }
+
+/* ---------- modes ---------- */
 const gp=$('gp'), vk=$('vk'), set=$('set');
 let mode='mouse';
-function setMode(m){
-  mode=m;
-  const showGp = m==='gamepad' && !(source==='physical');
-  gp.style.display = showGp?'':'none';
-  $('bMouse').classList.toggle('on', m==='mouse');
-  $('bGp').classList.toggle('on', m==='gamepad');
+function setMode(m){ mode=m;
+  gp.style.display = (m==='gamepad'&&source!=='physical')?'':'none';
+  $('mMouse').classList.toggle('on',m==='mouse');
+  $('mGp').classList.toggle('on',m==='gamepad');
 }
-$('bMouse').onpointerup=()=>setMode('mouse');
-$('bGp').onpointerup=()=>setMode('gamepad');
-$('bKb').onpointerup=()=>{ vk.style.display=vk.style.display==='block'?'none':'block';
-  $('bKb').classList.toggle('on'); };
-$('bSet').onpointerup=()=>{ set.classList.toggle('open'); $('bSet').classList.toggle('on'); };
+$('mMouse').onpointerup=()=>{setMode('mouse');closeMenu();};
+$('mGp').onpointerup=()=>{setMode('gamepad');closeMenu();};
+$('mKb').onpointerup=()=>{vk.style.display='block';closeMenu();};
+$('vkclose').onpointerup=()=>{vk.style.display='none';};
+$('mSet').onpointerup=()=>{set.classList.add('open');closeMenu();};
+// закрытие настроек тапом вне
+document.addEventListener('pointerdown',e=>{
+  if(set.classList.contains('open') && !set.contains(e.target) && e.target!==fab) set.classList.remove('open');
+},true);
 
-/* ---------- opacity / quality ---------- */
-$('opac').oninput=e=>{ gp.style.opacity=e.target.value/100; localStorage.o=e.target.value; };
-if(localStorage.o){ $('opac').value=localStorage.o; gp.style.opacity=localStorage.o/100; }
-$('qual').oninput=e=>{ localStorage.q=e.target.value; if(rfb) rfb.qualityLevel=+e.target.value; };
-$('comp').oninput=e=>{ localStorage.c=e.target.value; if(rfb) rfb.compressionLevel=+e.target.value; };
-if(localStorage.q)$('qual').value=localStorage.q; if(localStorage.c)$('comp').value=localStorage.c;
+/* ---------- fit to my screen ---------- */
+const RES=[[960,540],[1280,720],[1600,900],[1920,1080]];
+$('fit').onpointerup=async()=>{
+  if(!ctl) return;
+  const ar=Math.max(innerWidth,innerHeight)/Math.min(innerWidth,innerHeight);
+  // выбрать ширину по размеру экрана, высоту по пропорции телефона (чётную)
+  const wpx=Math.max(innerWidth,innerHeight)*(devicePixelRatio||1);
+  const w=wpx>=1700?1920:wpx>=1400?1600:1280;
+  let h=Math.round(w/ar/2)*2;
+  h=Math.max(480,Math.min(1080,h));
+  $('fit').textContent='⏳ подгоняю…';
+  try{ await fetch(`${ctl}/resize?w=${w}&h=${h}&fps=${document.querySelector('#fpsChips .on').dataset.fps}&key=${pw}`,{mode:'cors'}); }catch(e){}
+  setTimeout(()=>$('fit').textContent='Подогнать под мой экран',12000);
+};
 
-/* ---------- server res/fps ---------- */
+/* ---------- settings widgets ---------- */
 function chips(id){ for(const ch of $(id).children)
   ch.onpointerup=()=>{ for(const x of $(id).children) x.classList.remove('on'); ch.classList.add('on'); }; }
 chips('resChips'); chips('fpsChips');
@@ -212,10 +245,15 @@ $('applySrv').onpointerup=async()=>{
   if(!ctl) return;
   const r=document.querySelector('#resChips .on').dataset.res.split('x');
   const f=document.querySelector('#fpsChips .on').dataset.fps;
-  $('applySrv').textContent='⏳ …';
+  $('applySrv').textContent='⏳';
   try{ await fetch(`${ctl}/resize?w=${r[0]}&h=${r[1]}&fps=${f}&key=${pw}`,{mode:'cors'}); }catch(e){}
-  setTimeout(()=>$('applySrv').textContent='✔ Применить на сервере',12000);
+  setTimeout(()=>$('applySrv').textContent='✔ Применить',12000);
 };
+$('opac').oninput=e=>{ gp.style.opacity=e.target.value/100; localStorage.o=e.target.value; };
+if(localStorage.o){ $('opac').value=localStorage.o; gp.style.opacity=localStorage.o/100; }
+$('qual').oninput=e=>{ localStorage.q=e.target.value; if(rfb) rfb.qualityLevel=+e.target.value; };
+$('comp').oninput=e=>{ localStorage.c=e.target.value; if(rfb) rfb.compressionLevel=+e.target.value; };
+if(localStorage.q)$('qual').value=localStorage.q; if(localStorage.c)$('comp').value=localStorage.c;
 
 /* ---------- virtual gamepad ---------- */
 for(const b of document.querySelectorAll('.g[data-gb]')){
@@ -237,16 +275,16 @@ function stick(el,ax,ay){ const nub=el.querySelector('.nub'); let pid=null;
   function mv(e){const{cx,cy,rad}=c();let dx=(e.clientX-cx)/rad,dy=(e.clientY-cy)/rad;
     const m=Math.hypot(dx,dy);if(m>1){dx/=m;dy/=m;}
     A[ax]=dx;A[ay]=dy;dirty=true;
-    nub.style.transform=`translate(calc(-50% + ${dx*30}px),calc(-50% + ${dy*30}px))`;}}
+    nub.style.transform=`translate(calc(-50% + ${dx*28}px),calc(-50% + ${dy*28}px))`;}}
 stick($('stickL'),0,1); stick($('stickR'),2,3);
 
-/* ---------- physical gamepad (BT/OTG) ---------- */
+/* ---------- physical gamepad ---------- */
 let source='virtual', physIdx=null;
 for(const r of document.querySelectorAll('input[name=src]'))
   r.addEventListener('change',()=>{source=r.value;apply();});
 function list(){ const p=[...navigator.getGamepads()].filter(Boolean);
-  $('gplist').textContent=p.length?p.map(g=>`#${g.index}: ${g.id.slice(0,38)}`).join(' | ')
-    :'не обнаружен — нажмите кнопку на геймпаде'; return p; }
+  $('gplist').textContent=p.length?p.map(g=>`#${g.index}: ${g.id.slice(0,36)}`).join(' | ')
+    :'нажмите кнопку на геймпаде'; return p; }
 function apply(){ if(source==='physical'){const p=list();physIdx=p.length?p[0].index:null;}
   else physIdx=null; setMode(mode); }
 window.addEventListener('gamepadconnected',()=>{ list();
@@ -261,28 +299,25 @@ setInterval(list,3000);
       A[4]=g.buttons[6]?g.buttons[6].value:0;A[5]=g.buttons[7]?g.buttons[7].value:0;dirty=true;}}
   requestAnimationFrame(poll); })();
 
-/* ---------- full keyboard ---------- */
-const KS={Esc:0xFF1B,Tab:0xFF09,Caps:0xFFE5,Shift:0xFFE1,Ctrl:0xFFE3,Alt:0xFFE9,Win:0xFFEB,
-  Enter:0xFF0D,Bksp:0xFF08,Del:0xFFFF,Home:0xFF50,End:0xFF57,PgUp:0xFF55,PgDn:0xFF56,
-  Up:0xFF52,Down:0xFF54,Left:0xFF51,Right:0xFF53,Space:0x20};
+/* ---------- compact keyboard ---------- */
+const KS={Esc:0xFF1B,Tab:0xFF09,Shift:0xFFE1,Ctrl:0xFFE3,Alt:0xFFE9,Win:0xFFEB,
+  Enter:0xFF0D,Bksp:0xFF08,Del:0xFFFF,Up:0xFF52,Down:0xFF54,Left:0xFF51,Right:0xFF53,Space:0x20};
 for(let i=1;i<=12;i++)KS['F'+i]=0xFFBD+i;
 const SH={'`':'~','1':'!','2':'@','3':'#','4':'$','5':'%','6':'^','7':'&','8':'*','9':'(','0':')',
   '-':'_','=':'+','[':'{',']':'}','\\':'|',';':':',"'":'"',',':'<','.':'>','/':'?'};
 const rows=[
- ['Esc','F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12','Del'],
- ['`','1','2','3','4','5','6','7','8','9','0','-','=','Bksp:w2'],
+ ['Esc','1','2','3','4','5','6','7','8','9','0','-','=','Bksp:w2'],
  ['Tab:w15','q','w','e','r','t','y','u','i','o','p','[',']','\\'],
- ['Caps:w15','a','s','d','f','g','h','j','k','l',';',"'",'Enter:w2'],
- ['Shift:w2','z','x','c','v','b','n','m',',','.','/','Up','PgUp'],
- ['Ctrl','Win','Alt','Space:sp','Home','End','Left','Down','Right','PgDn']];
-let mods={Shift:false,Ctrl:false,Alt:false,Win:false,Caps:false};
-function lbl(n){ if(n.length===1){ if(mods.Shift)return SH[n]||n.toUpperCase();
-    return mods.Caps&&/[a-z]/.test(n)?n.toUpperCase():n; }
+ ['F1','a','s','d','f','g','h','j','k','l',';',"'",'Enter:w2'],
+ ['Shift:w2','z','x','c','v','b','n','m',',','.','/','Up','Del'],
+ ['Ctrl','Win','Alt','Space:sp','`','Left','Down','Right']];
+let mods={Shift:false,Ctrl:false,Alt:false,Win:false};
+function lbl(n){ if(n.length===1) return mods.Shift?(SH[n]||n.toUpperCase()):n;
   return {Bksp:'⌫',Enter:'⏎',Space:'Space',Up:'↑',Down:'↓',Left:'←',Right:'→',Win:'❖'}[n]||n; }
 for(const row of rows){ const r=document.createElement('div');r.className='vkrow';
   for(const spec of row){ const[n,cls]=spec.split(':');
     const k=document.createElement('div');
-    k.className='vk'+(cls?' '+cls:'')+(/^F\d+$|^Esc$/.test(n)?' f':'');
+    k.className='vk'+(cls?' '+cls:'');
     k.dataset.n=n;k.textContent=lbl(n);
     k.addEventListener('pointerdown',e=>{e.preventDefault();press(n,k);});
     k.addEventListener('contextmenu',e=>e.preventDefault());
@@ -290,12 +325,9 @@ for(const row of rows){ const r=document.createElement('div');r.className='vkrow
 function refresh(){ for(const k of vk.querySelectorAll('.vk')){k.textContent=lbl(k.dataset.n);
   if(k.dataset.n in mods)k.classList.toggle('on',mods[k.dataset.n]);} }
 function press(n,el){
-  if(n in mods){ mods[n]=!mods[n];
-    if(n!=='Caps')sendKey(KS[n],mods[n]); else tapKey(KS.Caps); refresh(); return; }
+  if(n in mods){ mods[n]=!mods[n]; sendKey(KS[n],mods[n]); refresh(); return; }
   el.classList.add('on'); setTimeout(()=>el.classList.remove('on'),120);
-  if(n.length===1){ let ch=n;
-    if(mods.Shift)ch=SH[n]||n.toUpperCase();
-    else if(mods.Caps&&/[a-z]/.test(n))ch=n.toUpperCase();
+  if(n.length===1){ let ch=mods.Shift?(SH[n]||n.toUpperCase()):n;
     tapKey(ch.charCodeAt(0));
     if(mods.Shift){mods.Shift=false;sendKey(KS.Shift,false);refresh();} }
   else tapKey(KS[n]); }
