@@ -9,44 +9,87 @@
     -webkit-user-select:none;user-select:none;touch-action:none;font-family:sans-serif}
   #screen{position:absolute;inset:0}
   #status{position:absolute;top:6px;left:50%;transform:translateX(-50%);
-    color:#9ad;font-size:12px;z-index:5;background:rgba(0,0,0,.5);
-    padding:2px 10px;border-radius:10px}
+    color:#9ad;font-size:12px;z-index:20;background:rgba(0,0,0,.55);
+    padding:2px 10px;border-radius:10px;white-space:nowrap}
+  #modebar{position:absolute;top:8px;left:8px;display:flex;gap:6px;z-index:30}
+  .tab{padding:6px 14px;border-radius:10px;border:1px solid #3af5;color:#cde;
+    background:rgba(30,45,70,.55);font-size:14px;-webkit-tap-highlight-color:transparent}
+  .tab.on{background:rgba(80,160,255,.8);color:#fff}
+  .btn{border-radius:16px;border:1px solid #3af3;background:rgba(40,60,90,.45);
+    color:#cde;font-weight:bold;display:flex;align-items:center;justify-content:center;
+    -webkit-tap-highlight-color:transparent}
+  .btn.on{background:rgba(80,160,255,.75);color:#fff}
+  /* keyboard mode pads */
   .pad{position:absolute;bottom:12px;z-index:10;display:grid;gap:10px}
   #padL{left:12px;grid-template-columns:64px 64px}
   #padR{right:12px;grid-template-columns:64px 64px}
+  .pad .btn{width:64px;height:64px;font-size:20px}
+  .pad .wide{grid-column:span 2;width:138px}
   #padTop{top:8px;right:8px;display:flex;gap:8px;z-index:10;position:absolute}
-  .btn{width:64px;height:64px;border-radius:16px;border:1px solid #3af3;
-    background:rgba(40,60,90,.45);color:#cde;font-size:22px;font-weight:bold;
-    display:flex;align-items:center;justify-content:center;
-    -webkit-tap-highlight-color:transparent}
-  .btn.small{width:auto;height:34px;font-size:13px;padding:0 12px;border-radius:10px}
-  .btn.on{background:rgba(80,160,255,.75);color:#fff}
-  .wide{grid-column:span 2;width:138px}
+  #padTop .btn{width:auto;height:34px;font-size:13px;padding:0 12px;border-radius:10px}
+  /* gamepad mode */
+  #gp{position:absolute;inset:0;z-index:10;pointer-events:none}
+  #gp *{pointer-events:auto}
+  .stick{position:absolute;width:130px;height:130px;border-radius:50%;
+    border:2px solid #3af5;background:rgba(40,60,90,.3)}
+  .nub{position:absolute;left:50%;top:50%;width:56px;height:56px;border-radius:50%;
+    background:rgba(120,180,255,.8);transform:translate(-50%,-50%)}
+  #stickL{left:20px;bottom:70px}
+  #stickR{right:20px;bottom:70px}
+  .gbtn{position:absolute;width:56px;height:56px;border-radius:50%;font-size:18px}
+  #gp .cluster{position:absolute;right:24px;bottom:220px;width:170px;height:170px}
+  .gbtn.small{width:auto;height:30px;border-radius:8px;font-size:12px;padding:0 10px}
+  #gpstatus{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);
+    color:#8fc;font-size:11px;z-index:25;background:rgba(0,0,0,.5);padding:2px 8px;border-radius:8px}
 </style>
 </head>
 <body>
 <div id="screen"></div>
 <div id="status">подключение…</div>
-
-<div id="padTop">
-  <div class="btn small" data-key="0xFF0D">Enter</div>
-  <div class="btn small" data-key="0xFF1B">Esc</div>
-  <div class="btn small" data-key="0xFF08">Rescue</div>
-  <div class="btn small" id="kb">⌨</div>
+<div id="modebar">
+  <div class="tab on" id="tabKb">⌨ Клава</div>
+  <div class="tab" id="tabGp">🎮 Геймпад</div>
 </div>
 
-<div class="pad" id="padL">
-  <div class="btn wide" data-key="0xFF52">▲ Газ</div>
-  <div class="btn" data-key="0xFF51">◀</div>
-  <div class="btn" data-key="0xFF53">▶</div>
-  <div class="btn wide" data-key="0xFF54">▼ Назад</div>
+<!-- ============ KEYBOARD / MOUSE MODE ============ -->
+<div id="kbui">
+  <div id="padTop">
+    <div class="btn" data-key="0xFF0D">Enter</div>
+    <div class="btn" data-key="0xFF1B">Esc</div>
+    <div class="btn" data-key="0xFF08">Rescue</div>
+    <div class="btn" id="kb">⌨</div>
+  </div>
+  <div class="pad" id="padL">
+    <div class="btn wide" data-key="0xFF52">▲ Газ</div>
+    <div class="btn" data-key="0xFF51">◀</div>
+    <div class="btn" data-key="0xFF53">▶</div>
+    <div class="btn wide" data-key="0xFF54">▼ Назад</div>
+  </div>
+  <div class="pad" id="padR">
+    <div class="btn wide" data-key="0x0020">🔥 Огонь</div>
+    <div class="btn" data-key="0x006E">N₂O</div>
+    <div class="btn" data-key="0x0076">Дрифт</div>
+    <div class="btn wide" data-key="0x0062">👀 Назад</div>
+  </div>
 </div>
 
-<div class="pad" id="padR">
-  <div class="btn wide" data-key="0x0020">🔥 Огонь</div>
-  <div class="btn" data-key="0x006E">N₂O</div>
-  <div class="btn" data-key="0x0076">Дрифт</div>
-  <div class="btn wide" data-key="0x0062">👀 Назад</div>
+<!-- ============ GAMEPAD MODE ============ -->
+<div id="gp" style="display:none">
+  <div class="stick" id="stickL"><div class="nub"></div></div>
+  <div class="stick" id="stickR"><div class="nub"></div></div>
+  <div class="cluster">
+    <div class="btn gbtn" data-gb="3" style="left:57px;top:0">Y</div>
+    <div class="btn gbtn" data-gb="2" style="left:0;top:57px">X</div>
+    <div class="btn gbtn" data-gb="1" style="left:114px;top:57px">B</div>
+    <div class="btn gbtn" data-gb="0" style="left:57px;top:114px">A</div>
+  </div>
+  <div class="btn gbtn small" data-gb="4"  style="left:20px;bottom:230px">LB</div>
+  <div class="btn gbtn small" data-gb="6"  style="left:20px;bottom:270px">LT</div>
+  <div class="btn gbtn small" data-gb="8"  style="left:45%;top:50px">Back</div>
+  <div class="btn gbtn small" data-gb="9"  style="left:55%;top:50px">Start</div>
+  <div class="btn gbtn small" data-gb="5"  style="right:20px;bottom:440px">RB</div>
+  <div class="btn gbtn small" data-gb="7"  style="right:20px;bottom:480px">RT</div>
+  <div id="gpstatus">🎮 виртуальный геймпад | BT-геймпад: нажмите любую кнопку на нём</div>
 </div>
 
 <script type="module">
@@ -55,12 +98,13 @@ import RFB from './core/rfb.js';
 const params = new URLSearchParams(location.search);
 const pw = params.get('pw') || '';
 const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-const url = `${proto}://${location.host}/websockify`;
 const statusEl = document.getElementById('status');
 
+/* ---------- VNC (screen + keyboard/mouse) ---------- */
 let rfb;
 function connect() {
-  rfb = new RFB(document.getElementById('screen'), url, { credentials: { password: pw } });
+  rfb = new RFB(document.getElementById('screen'), `${proto}://${location.host}/websockify`,
+                { credentials: { password: pw } });
   rfb.scaleViewport = true;
   rfb.background = '#0b0e12';
   rfb.addEventListener('connect', () => statusEl.textContent = 'NimbusSeat — подключено');
@@ -68,36 +112,122 @@ function connect() {
     statusEl.textContent = 'отключено — переподключение…';
     setTimeout(connect, 2000);
   });
-  rfb.addEventListener('credentialsrequired', () => {
-    const p = prompt('Пароль VNC:');
-    rfb.sendCredentials({ password: p });
-  });
 }
 connect();
 
-// Touch buttons -> VNC key events
+/* ---------- gamepad WebSocket bridge ---------- */
+// gp param: full wss:// URL of the gamepad bridge tunnel
+const gpUrl = params.get('gp');
+let gws = null, gwsOpen = false;
+function gpConnect() {
+  if (!gpUrl) return;
+  gws = new WebSocket(gpUrl);
+  gws.onopen = () => { gwsOpen = true; gpStatus('🎮 мост геймпада подключён'); };
+  gws.onclose = () => { gwsOpen = false; gpStatus('мост геймпада: переподключение…'); setTimeout(gpConnect, 2000); };
+}
+gpConnect();
+function gpStatus(t){ const el=document.getElementById('gpstatus'); if(el) el.textContent=t; }
+
+/* virtual pad state */
+const B = new Array(17).fill(0);       // buttons
+const A = [0,0,0,0,0,0];               // lx ly rx ry lt rt
+let dirty = false;
+function send() {
+  if (gwsOpen) gws.send(JSON.stringify({b:B, a:A}));
+  dirty = false;
+}
+setInterval(() => { if (dirty) send(); }, 33);   // 30 Hz
+
+/* ---------- mode switching ---------- */
+const kbui = document.getElementById('kbui');
+const gpui = document.getElementById('gp');
+const tabKb = document.getElementById('tabKb');
+const tabGp = document.getElementById('tabGp');
+function setMode(gp) {
+  kbui.style.display = gp ? 'none' : '';
+  gpui.style.display = gp ? '' : 'none';
+  tabKb.classList.toggle('on', !gp);
+  tabGp.classList.toggle('on', gp);
+}
+tabKb.onpointerup = () => setMode(false);
+tabGp.onpointerup = () => setMode(true);
+
+/* ---------- keyboard-mode buttons ---------- */
 for (const btn of document.querySelectorAll('.btn[data-key]')) {
-  const keysym = parseInt(btn.dataset.key, 16);
-  const down = e => { e.preventDefault(); btn.classList.add('on');  rfb && rfb.sendKey(keysym, null, true);  };
-  const up   = e => { e.preventDefault(); btn.classList.remove('on'); rfb && rfb.sendKey(keysym, null, false); };
-  btn.addEventListener('pointerdown', down);
-  btn.addEventListener('pointerup', up);
-  btn.addEventListener('pointercancel', up);
-  btn.addEventListener('pointerleave', up);
+  const ks = parseInt(btn.dataset.key, 16);
+  const dn = e => { e.preventDefault(); btn.classList.add('on'); rfb && rfb.sendKey(ks, null, true); };
+  const up = e => { e.preventDefault(); btn.classList.remove('on'); rfb && rfb.sendKey(ks, null, false); };
+  btn.addEventListener('pointerdown', dn);
+  for (const ev of ['pointerup','pointercancel','pointerleave']) btn.addEventListener(ev, up);
   btn.addEventListener('contextmenu', e => e.preventDefault());
 }
-
-// On-screen keyboard toggle (types into hidden input, relays keys)
-const kbBtn = document.getElementById('kb');
 const hidden = document.createElement('input');
 hidden.style.cssText = 'position:absolute;opacity:0;left:-1000px';
 document.body.appendChild(hidden);
-kbBtn.addEventListener('pointerup', () => hidden.focus());
+document.getElementById('kb').addEventListener('pointerup', () => hidden.focus());
 hidden.addEventListener('input', () => {
   const ch = hidden.value.slice(-1);
   if (ch && rfb) { const ks = ch.charCodeAt(0); rfb.sendKey(ks, null, true); rfb.sendKey(ks, null, false); }
   hidden.value = '';
 });
+
+/* ---------- touch gamepad buttons ---------- */
+for (const btn of document.querySelectorAll('.btn[data-gb]')) {
+  const i = parseInt(btn.dataset.gb, 10);
+  const dn = e => { e.preventDefault(); btn.classList.add('on');
+    B[i] = 1; if (i===6) A[4]=1; if (i===7) A[5]=1; dirty = true; };
+  const up = e => { e.preventDefault(); btn.classList.remove('on');
+    B[i] = 0; if (i===6) A[4]=0; if (i===7) A[5]=0; dirty = true; };
+  btn.addEventListener('pointerdown', dn);
+  for (const ev of ['pointerup','pointercancel','pointerleave']) btn.addEventListener(ev, up);
+  btn.addEventListener('contextmenu', e => e.preventDefault());
+}
+
+/* ---------- touch sticks ---------- */
+function makeStick(el, ax, ay) {
+  const nub = el.querySelector('.nub');
+  let pid = null;
+  const rectC = () => { const r = el.getBoundingClientRect();
+    return { cx: r.left + r.width/2, cy: r.top + r.height/2, rad: r.width/2 }; };
+  el.addEventListener('pointerdown', e => { pid = e.pointerId; el.setPointerCapture(pid); move(e); });
+  el.addEventListener('pointermove', e => { if (e.pointerId === pid) move(e); });
+  const end = e => { if (e.pointerId !== pid) return; pid = null;
+    A[ax]=0; A[ay]=0; dirty = true; nub.style.transform = 'translate(-50%,-50%)'; };
+  el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+  function move(e) {
+    const {cx, cy, rad} = rectC();
+    let dx = (e.clientX - cx) / rad, dy = (e.clientY - cy) / rad;
+    const m = Math.hypot(dx, dy); if (m > 1) { dx/=m; dy/=m; }
+    A[ax] = dx; A[ay] = dy; dirty = true;
+    nub.style.transform = `translate(calc(-50% + ${dx*36}px), calc(-50% + ${dy*36}px))`;
+  }
+}
+makeStick(document.getElementById('stickL'), 0, 1);
+makeStick(document.getElementById('stickR'), 2, 3);
+
+/* ---------- REAL Bluetooth gamepad passthrough (Gamepad API) ---------- */
+let realPad = null;
+window.addEventListener('gamepadconnected', e => {
+  realPad = e.gamepad.index;
+  gpStatus(`🎮 BT-геймпад подключён: ${e.gamepad.id.slice(0,40)}`);
+  setMode(true);
+});
+window.addEventListener('gamepaddisconnected', e => {
+  if (realPad === e.gamepad.index) { realPad = null; gpStatus('BT-геймпад отключён'); }
+});
+function pollReal() {
+  if (realPad !== null) {
+    const g = navigator.getGamepads()[realPad];
+    if (g) {
+      for (let i = 0; i < 17 && i < g.buttons.length; i++) B[i] = g.buttons[i].pressed ? 1 : 0;
+      A[0]=g.axes[0]||0; A[1]=g.axes[1]||0; A[2]=g.axes[2]||0; A[3]=g.axes[3]||0;
+      A[4]=g.buttons[6]?g.buttons[6].value:0; A[5]=g.buttons[7]?g.buttons[7].value:0;
+      dirty = true;
+    }
+  }
+  requestAnimationFrame(pollReal);
+}
+requestAnimationFrame(pollReal);
 </script>
 </body>
 </html>
