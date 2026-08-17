@@ -5,83 +5,86 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>NimbusSeat</title>
 <style>
-  :root{--acc:#76b900;--bg:#0d0f13;--pane:rgba(16,20,26,.92)}
+  :root{--acc:#76b900;--bg:#0d0f13;--pane:rgba(14,18,24,.96)}
   html,body{margin:0;padding:0;background:var(--bg);height:100%;overflow:hidden;
     -webkit-user-select:none;user-select:none;touch-action:none;
     font-family:'Segoe UI',Roboto,sans-serif}
-  #screen{position:absolute;inset:0}
-  /* ---- GFN-style top bar (auto-hide) ---- */
-  #bar{position:fixed;top:0;left:0;right:0;height:44px;z-index:50;display:flex;
-    align-items:center;gap:4px;padding:0 8px;background:linear-gradient(rgba(0,0,0,.85),rgba(0,0,0,.4));
-    transition:transform .25s;}
-  #bar.hid{transform:translateY(-46px)}
-  #brand{color:#fff;font-weight:700;font-size:14px;margin-right:6px}
+  /* screen fills space under the bar */
+  #screen{position:absolute;top:40px;left:0;right:0;bottom:0}
+  /* ---- top bar: ALWAYS visible, thin ---- */
+  #bar{position:fixed;top:0;left:0;right:0;height:40px;z-index:50;display:flex;
+    align-items:center;gap:5px;padding:0 6px;background:#14181e;border-bottom:1px solid #2a2f36}
+  #brand{color:#fff;font-weight:700;font-size:12px;margin-right:4px}
   #brand b{color:var(--acc)}
-  .ib{width:38px;height:32px;border-radius:8px;border:1px solid #444;color:#ddd;
+  .ib{min-width:44px;height:30px;border-radius:8px;border:1px solid #444;color:#ddd;
     background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;
-    font-size:16px;-webkit-tap-highlight-color:transparent}
+    font-size:15px;padding:0 6px;-webkit-tap-highlight-color:transparent}
   .ib.on{background:var(--acc);border-color:var(--acc);color:#000}
-  #stats{margin-left:auto;color:#9c9;font-size:11px;text-align:right;line-height:1.2}
-  /* pill — always visible, shows bar back */
-  #pill{position:fixed;top:6px;left:50%;transform:translateX(-50%);z-index:49;
-    width:46px;height:14px;border-radius:8px;background:rgba(118,185,0,.5);display:none}
-  /* ---- GFN-style virtual gamepad ---- */
-  #gp{position:absolute;inset:0;z-index:10;pointer-events:none}
+  #stats{margin-left:auto;color:#9c9;font-size:10px;text-align:right;line-height:1.15}
+  /* ---- virtual gamepad: compact, non-overlapping, % based ---- */
+  #gp{position:absolute;top:40px;left:0;right:0;bottom:0;z-index:10;pointer-events:none}
   #gp *{pointer-events:auto}
-  .stick{position:absolute;width:128px;height:128px;border-radius:50%;
-    border:2px solid rgba(255,255,255,.35);background:rgba(255,255,255,.06)}
-  .nub{position:absolute;left:50%;top:50%;width:58px;height:58px;border-radius:50%;
-    background:rgba(255,255,255,.45);transform:translate(-50%,-50%)}
-  #stickL{left:18px;bottom:64px} #stickR{right:190px;bottom:34px;width:104px;height:104px}
-  .g{position:absolute;border-radius:50%;border:1.5px solid rgba(255,255,255,.4);
-    background:rgba(255,255,255,.10);color:#fff;font-weight:700;font-size:15px;
-    display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent}
-  .g.on{background:rgba(118,185,0,.75);border-color:var(--acc);color:#000}
-  #gp .abxy{position:absolute;right:16px;bottom:150px;width:158px;height:158px}
-  .abxy .g{width:52px;height:52px}
-  .dpad{position:absolute;left:170px;bottom:30px;width:132px;height:132px}
-  .dpad .g{width:44px;height:44px;border-radius:10px;font-size:13px}
-  .g.shoulder{border-radius:12px;width:64px;height:36px;font-size:13px}
-  .g.mid{border-radius:10px;width:52px;height:28px;font-size:11px}
+  .stick{position:absolute;width:26vmin;height:26vmin;max-width:150px;max-height:150px;
+    border-radius:50%;border:2px solid rgba(255,255,255,.4);background:rgba(255,255,255,.07)}
+  .nub{position:absolute;left:50%;top:50%;width:44%;height:44%;border-radius:50%;
+    background:rgba(255,255,255,.5);transform:translate(-50%,-50%)}
+  #stickL{left:2%;bottom:3%}
+  #stickR{right:2%;bottom:3%}
+  .g{position:absolute;border-radius:50%;border:1.5px solid rgba(255,255,255,.45);
+    background:rgba(255,255,255,.12);color:#fff;font-weight:700;
+    display:flex;align-items:center;justify-content:center;
+    -webkit-tap-highlight-color:transparent}
+  .g.on{background:rgba(118,185,0,.8);border-color:var(--acc);color:#000}
+  /* ABXY: above right stick */
+  .abxy{position:absolute;right:2%;bottom:calc(3% + 27vmin);width:24vmin;height:24vmin;
+    max-width:140px;max-height:140px}
+  .abxy .g{width:38%;height:38%;font-size:2.4vmin}
+  /* dpad: above left stick */
+  .dpad{position:absolute;left:2%;bottom:calc(3% + 27vmin);width:22vmin;height:22vmin;
+    max-width:130px;max-height:130px}
+  .dpad .g{width:36%;height:36%;border-radius:22%;font-size:2vmin}
+  /* shoulders: vertical stacks at screen edges, middle height */
+  .g.sh{border-radius:10px;width:11vmin;height:5.5vmin;max-width:64px;max-height:32px;font-size:1.9vmin}
+  #lb{left:2%;top:16%} #lt{left:2%;top:calc(16% + 6.5vmin)}
+  #rb{right:2%;top:16%} #rt{right:2%;top:calc(16% + 6.5vmin)}
+  .g.mid{border-radius:8px;width:9vmin;height:4.5vmin;max-width:52px;max-height:26px;font-size:1.9vmin}
+  #bk{left:calc(50% - 10vmin);top:2%} #st{left:calc(50% + 1vmin);top:2%}
   /* ---- keyboard ---- */
   #vk{position:fixed;left:0;right:0;bottom:0;z-index:55;background:var(--pane);
-    border-top:1px solid var(--acc);padding:4px 4px 8px;display:none}
-  .vkrow{display:flex;gap:3px;margin-top:3px}
-  .vk{flex:1;height:38px;border-radius:6px;border:1px solid #3a3f46;background:#1b2027;
-    color:#dde;font-size:13px;font-weight:600;display:flex;align-items:center;
+    border-top:1px solid var(--acc);padding:3px 3px 6px;display:none}
+  .vkrow{display:flex;gap:2px;margin-top:2px}
+  .vk{flex:1;height:36px;border-radius:5px;border:1px solid #3a3f46;background:#1b2027;
+    color:#dde;font-size:12px;font-weight:600;display:flex;align-items:center;
     justify-content:center;-webkit-tap-highlight-color:transparent;min-width:0}
-  .vk.f{font-size:10px;height:28px}
+  .vk.f{font-size:9px;height:26px}
   .vk.on{background:var(--acc);color:#000;border-color:var(--acc)}
   .vk.sp{flex:5}.vk.w15{flex:1.5}.vk.w2{flex:2}
   /* ---- settings drawer ---- */
-  #set{position:fixed;top:0;right:0;bottom:0;width:300px;max-width:85vw;z-index:60;
-    background:var(--pane);border-left:1px solid var(--acc);padding:14px;
+  #set{position:fixed;top:40px;right:0;bottom:0;width:300px;max-width:88vw;z-index:60;
+    background:var(--pane);border-left:1px solid var(--acc);padding:12px;
     transform:translateX(105%);transition:transform .25s;overflow-y:auto;color:#cde;font-size:13px}
   #set.open{transform:none}
-  #set h3{color:#fff;font-size:14px;margin:14px 0 6px;border-bottom:1px solid #333;padding-bottom:4px}
+  #set h3{color:#fff;font-size:13px;margin:12px 0 6px;border-bottom:1px solid #333;padding-bottom:3px}
   #set h3:first-child{margin-top:0}
-  #set label{display:flex;align-items:center;gap:8px;padding:5px 2px}
-  .chip{display:inline-block;padding:6px 12px;margin:3px 4px 3px 0;border-radius:8px;
+  #set label{display:flex;align-items:center;gap:8px;padding:4px 2px}
+  .chip{display:inline-block;padding:6px 11px;margin:3px 4px 3px 0;border-radius:8px;
     border:1px solid #444;background:#1b2027;color:#cde;font-size:12px}
   .chip.on{background:var(--acc);color:#000;border-color:var(--acc)}
-  #set .hint{color:#789;font-size:11px;margin-top:4px}
-  #gplist{color:#8fc;font-size:11px;margin:4px 0}
+  #set .hint{color:#789;font-size:10px;margin-top:3px}
+  #gplist{color:#8fc;font-size:10px;margin:3px 0}
   input[type=range]{width:100%}
 </style>
 </head>
 <body>
-<div id="screen"></div>
-<div id="pill"></div>
-
 <div id="bar">
   <span id="brand">NIMBUS<b>SEAT</b></span>
+  <div class="ib on" id="bMouse" title="мышь">🖱</div>
   <div class="ib" id="bGp" title="геймпад">🎮</div>
   <div class="ib" id="bKb" title="клавиатура">⌨</div>
-  <div class="ib" id="bEye" title="скрыть оверлеи">👁</div>
   <div class="ib" id="bSet" title="настройки">⚙</div>
-  <div class="ib" id="bBar" title="спрятать панель">▲</div>
   <div id="stats">—</div>
 </div>
+<div id="screen"></div>
 
 <!-- settings -->
 <div id="set">
@@ -90,7 +93,7 @@
   <label><input type="radio" name="src" value="physical"> Физический — Bluetooth / OTG</label>
   <div id="gplist">не обнаружен — нажмите кнопку на геймпаде</div>
   <label><input type="checkbox" id="autosw" checked> автопереключение на физический</label>
-  <div class="hint">BT и OTG геймпады браузер видит одинаково (Gamepad API). Оба идут в виртуальный Xbox 360 pad на сервере.</div>
+  <div class="hint">При физическом геймпаде экранный скрывается — экран остаётся мышью.</div>
 
   <h3>🖥 Разрешение сервера</h3>
   <div id="resChips">
@@ -105,40 +108,39 @@
     <span class="chip on" data-fps="30">30</span>
     <span class="chip" data-fps="60">60</span>
   </div>
-  <div class="hint">Применение разрешения/FPS перезапустит рабочий стол сервера (~10 сек, игры перезапустятся).</div>
+  <div class="hint">Применение перезапустит рабочий стол сервера (~10 сек).</div>
   <span class="chip" id="applySrv" style="background:#2a4;color:#fff">✔ Применить на сервере</span>
 
-  <h3>📶 Качество потока (без перезапуска)</h3>
+  <h3>📶 Качество потока (сразу)</h3>
   Качество JPEG <input type="range" id="qual" min="0" max="9" value="6">
   Сжатие <input type="range" id="comp" min="0" max="9" value="2">
 
-  <h3>👁 Оверлеи</h3>
+  <h3>🎛 Оверлей геймпада</h3>
   Прозрачность <input type="range" id="opac" min="15" max="100" value="65">
-  <label><input type="checkbox" id="hideOnPhys" checked> скрывать экранный геймпад при физическом</label>
 </div>
 
-<!-- GFN-style virtual gamepad -->
-<div id="gp">
-  <div class="stick" id="stickL"><div class="nub"></div></div>
-  <div class="stick" id="stickR"><div class="nub"></div></div>
+<!-- virtual gamepad -->
+<div id="gp" style="display:none">
+  <div class="g sh" data-gb="4" id="lb">LB</div>
+  <div class="g sh" data-gb="6" id="lt">LT</div>
+  <div class="g sh" data-gb="5" id="rb">RB</div>
+  <div class="g sh" data-gb="7" id="rt">RT</div>
+  <div class="g mid" data-gb="8" id="bk">⧉</div>
+  <div class="g mid" data-gb="9" id="st">☰</div>
   <div class="dpad">
-    <div class="g" data-gb="12" style="left:44px;top:0">▲</div>
-    <div class="g" data-gb="14" style="left:0;top:44px">◀</div>
-    <div class="g" data-gb="15" style="left:88px;top:44px">▶</div>
-    <div class="g" data-gb="13" style="left:44px;top:88px">▼</div>
+    <div class="g" data-gb="12" style="left:32%;top:0">▲</div>
+    <div class="g" data-gb="14" style="left:0;top:32%">◀</div>
+    <div class="g" data-gb="15" style="right:0;top:32%">▶</div>
+    <div class="g" data-gb="13" style="left:32%;bottom:0">▼</div>
   </div>
   <div class="abxy">
-    <div class="g" data-gb="3" style="left:53px;top:0">Y</div>
-    <div class="g" data-gb="2" style="left:0;top:53px">X</div>
-    <div class="g" data-gb="1" style="left:106px;top:53px">B</div>
-    <div class="g" data-gb="0" style="left:53px;top:106px">A</div>
+    <div class="g" data-gb="3" style="left:31%;top:0">Y</div>
+    <div class="g" data-gb="2" style="left:0;top:31%">X</div>
+    <div class="g" data-gb="1" style="right:0;top:31%">B</div>
+    <div class="g" data-gb="0" style="left:31%;bottom:0">A</div>
   </div>
-  <div class="g shoulder" data-gb="4" style="left:16px;top:56px">LB</div>
-  <div class="g shoulder" data-gb="6" style="left:16px;top:100px">LT</div>
-  <div class="g shoulder" data-gb="5" style="right:16px;top:56px">RB</div>
-  <div class="g shoulder" data-gb="7" style="right:16px;top:100px">RT</div>
-  <div class="g mid" data-gb="8" style="left:calc(50% - 62px);top:56px">⧉</div>
-  <div class="g mid" data-gb="9" style="left:calc(50% + 10px);top:56px">☰</div>
+  <div class="stick" id="stickL"><div class="nub"></div></div>
+  <div class="stick" id="stickR"><div class="nub"></div></div>
 </div>
 
 <div id="vk"></div>
@@ -156,8 +158,7 @@ function connect(){
     {credentials:{password:pw}});
   rfb.scaleViewport = true; rfb.background = '#0d0f13';
   rfb.qualityLevel = +localStorage.q||6; rfb.compressionLevel = +localStorage.c||2;
-  rfb.addEventListener('connect', ()=>stat());
-  rfb.addEventListener('disconnect', ()=>{ stat('reconnect'); setTimeout(connect,2000); });
+  rfb.addEventListener('disconnect', ()=>setTimeout(connect,2000));
 }
 connect();
 const sendKey=(k,d)=>rfb&&rfb.sendKey(k,null,d);
@@ -167,12 +168,10 @@ const tapKey=k=>{sendKey(k,true);sendKey(k,false);};
 let rtt='—';
 async function ping(){ if(!ctl) return;
   const t=performance.now();
-  try{ await fetch(ctl+'/ping?key='+pw,{mode:'cors'}); rtt=Math.round(performance.now()-t)+' ms';}catch(e){rtt='—';}
+  try{ await fetch(ctl+'/ping?key='+pw,{mode:'cors'}); rtt=Math.round(performance.now()-t)+'ms';}catch(e){rtt='—';}
 }
-setInterval(ping,4000); ping();
-function stat(s){ $('stats').innerHTML = (s==='reconnect'?'⟳ реконнект…':'● онлайн')+
-  `<br>ping ${rtt} | гп: ${gwsOpen?'✓':'✗'}`; }
-setInterval(()=>stat(),2000);
+setInterval(ping,5000); ping();
+setInterval(()=>{ $('stats').innerHTML=`ping ${rtt}<br>гп ${gwsOpen?'✓':'✗'}`; },2000);
 
 /* ---------- gamepad ws ---------- */
 let gws=null, gwsOpen=false;
@@ -182,63 +181,55 @@ gpc();
 const B=new Array(17).fill(0), A=[0,0,0,0,0,0]; let dirty=false;
 setInterval(()=>{ if(dirty&&gwsOpen){gws.send(JSON.stringify({b:B,a:A}));dirty=false;} },33);
 
-/* ---------- top bar / overlay toggles ---------- */
-const bar=$('bar'), pill=$('pill'), gp=$('gp'), vk=$('vk'), set=$('set');
-let barTimer;
-function showBar(){ bar.classList.remove('hid'); pill.style.display='none';
-  clearTimeout(barTimer); barTimer=setTimeout(hideBar,6000); }
-function hideBar(){ bar.classList.add('hid'); pill.style.display='block'; }
-pill.onpointerup=showBar; showBar();
-$('bBar').onpointerup=hideBar;
-
-let gpVis=true, allHidden=false;
-$('bGp').onpointerup=()=>{ gpVis=!gpVis; sync(); };
-$('bKb').onpointerup=()=>{ vk.style.display = vk.style.display==='block'?'none':'block';
-  $('bKb').classList.toggle('on'); };
-$('bEye').onpointerup=()=>{ allHidden=!allHidden; $('bEye').classList.toggle('on',allHidden); sync(); };
-$('bSet').onpointerup=()=>{ set.classList.toggle('open'); $('bSet').classList.toggle('on'); };
-function sync(){
-  const hide = allHidden || !gpVis || (source==='physical' && $('hideOnPhys').checked);
-  gp.style.display = hide?'none':'';
-  $('bGp').classList.toggle('on', !hide);
-  if(allHidden){ vk.style.display='none'; $('bKb').classList.remove('on'); }
+/* ---------- modes: mouse (default) / gamepad ---------- */
+const gp=$('gp'), vk=$('vk'), set=$('set');
+let mode='mouse';
+function setMode(m){
+  mode=m;
+  const showGp = m==='gamepad' && !(source==='physical');
+  gp.style.display = showGp?'':'none';
+  $('bMouse').classList.toggle('on', m==='mouse');
+  $('bGp').classList.toggle('on', m==='gamepad');
 }
+$('bMouse').onpointerup=()=>setMode('mouse');
+$('bGp').onpointerup=()=>setMode('gamepad');
+$('bKb').onpointerup=()=>{ vk.style.display=vk.style.display==='block'?'none':'block';
+  $('bKb').classList.toggle('on'); };
+$('bSet').onpointerup=()=>{ set.classList.toggle('open'); $('bSet').classList.toggle('on'); };
 
-/* ---------- overlay opacity ---------- */
+/* ---------- opacity / quality ---------- */
 $('opac').oninput=e=>{ gp.style.opacity=e.target.value/100; localStorage.o=e.target.value; };
 if(localStorage.o){ $('opac').value=localStorage.o; gp.style.opacity=localStorage.o/100; }
-
-/* ---------- stream quality ---------- */
 $('qual').oninput=e=>{ localStorage.q=e.target.value; if(rfb) rfb.qualityLevel=+e.target.value; };
 $('comp').oninput=e=>{ localStorage.c=e.target.value; if(rfb) rfb.compressionLevel=+e.target.value; };
 if(localStorage.q)$('qual').value=localStorage.q; if(localStorage.c)$('comp').value=localStorage.c;
 
-/* ---------- server resolution / fps ---------- */
-function chips(id,attr){ for(const ch of $(id).children)
+/* ---------- server res/fps ---------- */
+function chips(id){ for(const ch of $(id).children)
   ch.onpointerup=()=>{ for(const x of $(id).children) x.classList.remove('on'); ch.classList.add('on'); }; }
 chips('resChips'); chips('fpsChips');
 $('applySrv').onpointerup=async()=>{
-  if(!ctl) return alert('control-канал недоступен');
-  const res=document.querySelector('#resChips .on').dataset.res.split('x');
-  const fps=document.querySelector('#fpsChips .on').dataset.fps;
-  $('applySrv').textContent='⏳ применяется…';
-  try{ await fetch(`${ctl}/resize?w=${res[0]}&h=${res[1]}&fps=${fps}&key=${pw}`,{mode:'cors'}); }catch(e){}
-  setTimeout(()=>$('applySrv').textContent='✔ Применить на сервере', 12000);
+  if(!ctl) return;
+  const r=document.querySelector('#resChips .on').dataset.res.split('x');
+  const f=document.querySelector('#fpsChips .on').dataset.fps;
+  $('applySrv').textContent='⏳ …';
+  try{ await fetch(`${ctl}/resize?w=${r[0]}&h=${r[1]}&fps=${f}&key=${pw}`,{mode:'cors'}); }catch(e){}
+  setTimeout(()=>$('applySrv').textContent='✔ Применить на сервере',12000);
 };
 
 /* ---------- virtual gamepad ---------- */
 for(const b of document.querySelectorAll('.g[data-gb]')){
   const i=+b.dataset.gb;
-  b.addEventListener('pointerdown',e=>{e.preventDefault();b.classList.add('on');
+  b.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();b.classList.add('on');
     B[i]=1; if(i===6)A[4]=1; if(i===7)A[5]=1; dirty=true;});
-  for(const ev of ['pointerup','pointercancel','pointerleave'])
+  for(const ev of ['pointerup','pointercancel'])
     b.addEventListener(ev,e=>{e.preventDefault();b.classList.remove('on');
       B[i]=0; if(i===6)A[4]=0; if(i===7)A[5]=0; dirty=true;});
   b.addEventListener('contextmenu',e=>e.preventDefault());
 }
 function stick(el,ax,ay){ const nub=el.querySelector('.nub'); let pid=null;
   const c=()=>{const r=el.getBoundingClientRect();return{cx:r.left+r.width/2,cy:r.top+r.height/2,rad:r.width/2};};
-  el.addEventListener('pointerdown',e=>{pid=e.pointerId;el.setPointerCapture(pid);mv(e);});
+  el.addEventListener('pointerdown',e=>{e.stopPropagation();pid=e.pointerId;el.setPointerCapture(pid);mv(e);});
   el.addEventListener('pointermove',e=>{if(e.pointerId===pid)mv(e);});
   const end=e=>{if(e.pointerId!==pid)return;pid=null;A[ax]=0;A[ay]=0;dirty=true;
     nub.style.transform='translate(-50%,-50%)';};
@@ -246,7 +237,7 @@ function stick(el,ax,ay){ const nub=el.querySelector('.nub'); let pid=null;
   function mv(e){const{cx,cy,rad}=c();let dx=(e.clientX-cx)/rad,dy=(e.clientY-cy)/rad;
     const m=Math.hypot(dx,dy);if(m>1){dx/=m;dy/=m;}
     A[ax]=dx;A[ay]=dy;dirty=true;
-    nub.style.transform=`translate(calc(-50% + ${dx*36}px),calc(-50% + ${dy*36}px))`;}}
+    nub.style.transform=`translate(calc(-50% + ${dx*30}px),calc(-50% + ${dy*30}px))`;}}
 stick($('stickL'),0,1); stick($('stickR'),2,3);
 
 /* ---------- physical gamepad (BT/OTG) ---------- */
@@ -254,10 +245,10 @@ let source='virtual', physIdx=null;
 for(const r of document.querySelectorAll('input[name=src]'))
   r.addEventListener('change',()=>{source=r.value;apply();});
 function list(){ const p=[...navigator.getGamepads()].filter(Boolean);
-  $('gplist').textContent=p.length?p.map(g=>`#${g.index}: ${g.id.slice(0,40)}`).join(' | ')
+  $('gplist').textContent=p.length?p.map(g=>`#${g.index}: ${g.id.slice(0,38)}`).join(' | ')
     :'не обнаружен — нажмите кнопку на геймпаде'; return p; }
 function apply(){ if(source==='physical'){const p=list();physIdx=p.length?p[0].index:null;}
-  else physIdx=null; sync(); }
+  else physIdx=null; setMode(mode); }
 window.addEventListener('gamepadconnected',()=>{ list();
   if($('autosw').checked){ source='physical';
     document.querySelector('input[name=src][value=physical]').checked=true; apply(); }});
@@ -308,7 +299,7 @@ function press(n,el){
     tapKey(ch.charCodeAt(0));
     if(mods.Shift){mods.Shift=false;sendKey(KS.Shift,false);refresh();} }
   else tapKey(KS[n]); }
-sync();
+setMode('mouse');
 </script>
 </body>
 </html>
