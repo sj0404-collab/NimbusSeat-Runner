@@ -1,0 +1,75 @@
+name: Remote Seat (browser desktop)
+on:
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: "Session length, minutes (max 340)"
+        default: "340"
+
+permissions:
+  contents: write
+
+jobs:
+  seat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install desktop stack (Xvfb + openbox + x11vnc + noVNC + SuperTuxKart)
+        run: |
+          sudo apt-get update -q
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -q \
+            xvfb openbox x11vnc novnc websockify mesa-utils supertuxkart fonts-dejavu
+
+      - name: Download cloudflared (quick tunnel, no account)
+        run: |
+          curl -sL -o /tmp/cloudflared \
+            https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+          chmod +x /tmp/cloudflared
+
+      - name: Start virtual desktop
+        run: |
+          export DISPLAY=:99
+          Xvfb :99 -screen 0 1280x720x24 &
+          sleep 2
+          openbox &
+          # SuperTuxKart on software GL (llvmpipe)
+          LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe supertuxkart \
+            --screensize=1280x720 --fullscreen &
+          sleep 5
+          PASS=$(head -c 9 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 10)
+          echo "VNC_PASS=$PASS" >> $GITHUB_ENV
+          x11vnc -display :99 -forever -shared -passwd "$PASS" -rfbport 5900 -quiet &
+          websockify --web /usr/share/novnc 6080 localhost:5900 &
+          sleep 2
+
+      - name: Open Cloudflare quick tunnel and publish URL
+        run: |
+          /tmp/cloudflared tunnel --url http://localhost:6080 --no-autoupdate > /tmp/cf.log 2>&1 &
+          for i in $(seq 1 30); do
+            URL=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' /tmp/cf.log | head -1 || true)
+            [ -n "$URL" ] && break
+            sleep 2
+          done
+          if [ -z "$URL" ]; then cat /tmp/cf.log; exit 1; fi
+          echo "Tunnel: $URL"
+          END=$(date -u -d "+${{ github.event.inputs.minutes }} minutes" +"%Y-%m-%d %H:%M UTC")
+          mkdir -p /tmp/live && cd /tmp/live
+          git init -q -b live
+          cat > SESSION.md <<EOM
+          # NimbusSeat Remote Seat — LIVE
+
+          - **Подключение (браузер):** $URL/vnc.html?autoconnect=true&resize=scale
+          - **Пароль VNC:** \`$VNC_PASS\`
+          - Игра: SuperTuxKart (software rendering)
+          - Сессия завершится примерно: $END
+          EOM
+          git add SESSION.md
+          git -c user.name=runner -c user.email=runner@local commit -qm "live session info"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" live:live
+
+      - name: Keep session alive
+        run: |
+          echo "Session running for ${{ github.event.inputs.minutes }} minutes..."
+          sleep $(( ${{ github.event.inputs.minutes }} * 60 ))
