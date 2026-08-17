@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>NimbusSeat — Remote Seat</title>
+<style>
+  html,body{margin:0;padding:0;background:#0b0e12;height:100%;overflow:hidden;
+    -webkit-user-select:none;user-select:none;touch-action:none;font-family:sans-serif}
+  #screen{position:absolute;inset:0}
+  #status{position:absolute;top:6px;left:50%;transform:translateX(-50%);
+    color:#9ad;font-size:12px;z-index:5;background:rgba(0,0,0,.5);
+    padding:2px 10px;border-radius:10px}
+  .pad{position:absolute;bottom:12px;z-index:10;display:grid;gap:10px}
+  #padL{left:12px;grid-template-columns:64px 64px}
+  #padR{right:12px;grid-template-columns:64px 64px}
+  #padTop{top:8px;right:8px;display:flex;gap:8px;z-index:10;position:absolute}
+  .btn{width:64px;height:64px;border-radius:16px;border:1px solid #3af3;
+    background:rgba(40,60,90,.45);color:#cde;font-size:22px;font-weight:bold;
+    display:flex;align-items:center;justify-content:center;
+    -webkit-tap-highlight-color:transparent}
+  .btn.small{width:auto;height:34px;font-size:13px;padding:0 12px;border-radius:10px}
+  .btn.on{background:rgba(80,160,255,.75);color:#fff}
+  .wide{grid-column:span 2;width:138px}
+</style>
+</head>
+<body>
+<div id="screen"></div>
+<div id="status">подключение…</div>
+
+<div id="padTop">
+  <div class="btn small" data-key="0xFF0D">Enter</div>
+  <div class="btn small" data-key="0xFF1B">Esc</div>
+  <div class="btn small" data-key="0xFF08">Rescue</div>
+  <div class="btn small" id="kb">⌨</div>
+</div>
+
+<div class="pad" id="padL">
+  <div class="btn wide" data-key="0xFF52">▲ Газ</div>
+  <div class="btn" data-key="0xFF51">◀</div>
+  <div class="btn" data-key="0xFF53">▶</div>
+  <div class="btn wide" data-key="0xFF54">▼ Назад</div>
+</div>
+
+<div class="pad" id="padR">
+  <div class="btn wide" data-key="0x0020">🔥 Огонь</div>
+  <div class="btn" data-key="0x006E">N₂O</div>
+  <div class="btn" data-key="0x0076">Дрифт</div>
+  <div class="btn wide" data-key="0x0062">👀 Назад</div>
+</div>
+
+<script type="module">
+import RFB from './core/rfb.js';
+
+const params = new URLSearchParams(location.search);
+const pw = params.get('pw') || '';
+const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+const url = `${proto}://${location.host}/websockify`;
+const statusEl = document.getElementById('status');
+
+let rfb;
+function connect() {
+  rfb = new RFB(document.getElementById('screen'), url, { credentials: { password: pw } });
+  rfb.scaleViewport = true;
+  rfb.background = '#0b0e12';
+  rfb.addEventListener('connect', () => statusEl.textContent = 'NimbusSeat — подключено');
+  rfb.addEventListener('disconnect', () => {
+    statusEl.textContent = 'отключено — переподключение…';
+    setTimeout(connect, 2000);
+  });
+  rfb.addEventListener('credentialsrequired', () => {
+    const p = prompt('Пароль VNC:');
+    rfb.sendCredentials({ password: p });
+  });
+}
+connect();
+
+// Touch buttons -> VNC key events
+for (const btn of document.querySelectorAll('.btn[data-key]')) {
+  const keysym = parseInt(btn.dataset.key, 16);
+  const down = e => { e.preventDefault(); btn.classList.add('on');  rfb && rfb.sendKey(keysym, null, true);  };
+  const up   = e => { e.preventDefault(); btn.classList.remove('on'); rfb && rfb.sendKey(keysym, null, false); };
+  btn.addEventListener('pointerdown', down);
+  btn.addEventListener('pointerup', up);
+  btn.addEventListener('pointercancel', up);
+  btn.addEventListener('pointerleave', up);
+  btn.addEventListener('contextmenu', e => e.preventDefault());
+}
+
+// On-screen keyboard toggle (types into hidden input, relays keys)
+const kbBtn = document.getElementById('kb');
+const hidden = document.createElement('input');
+hidden.style.cssText = 'position:absolute;opacity:0;left:-1000px';
+document.body.appendChild(hidden);
+kbBtn.addEventListener('pointerup', () => hidden.focus());
+hidden.addEventListener('input', () => {
+  const ch = hidden.value.slice(-1);
+  if (ch && rfb) { const ks = ch.charCodeAt(0); rfb.sendKey(ks, null, true); rfb.sendKey(ks, null, false); }
+  hidden.value = '';
+});
+</script>
+</body>
+</html>

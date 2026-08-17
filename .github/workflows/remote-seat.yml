@@ -41,7 +41,11 @@ jobs:
           PASS=$(head -c 9 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 10)
           echo "VNC_PASS=$PASS" >> $GITHUB_ENV
           x11vnc -display :99 -forever -shared -passwd "$PASS" -rfbport 5900 -quiet &
-          websockify --web /usr/share/novnc 6080 localhost:5900 &
+          # web root with our touch-control page + noVNC core
+          mkdir -p /tmp/web
+          cp -r /usr/share/novnc/* /tmp/web/
+          cp "$GITHUB_WORKSPACE/clients/web-touch/nimbus.html" /tmp/web/nimbus.html
+          websockify --web /tmp/web 6080 localhost:5900 &
           sleep 2
 
       - name: Open Cloudflare quick tunnel and publish URL
@@ -60,7 +64,8 @@ jobs:
           cat > SESSION.md <<EOM
           # NimbusSeat Remote Seat — LIVE
 
-          - **Подключение (браузер):** $URL/vnc.html?autoconnect=true&resize=scale
+          - **📱 Сенсорное управление (телефон):** $URL/nimbus.html?pw=$VNC_PASS
+          - **🖥 Классический noVNC (ПК):** $URL/vnc.html?autoconnect=true&resize=scale
           - **Пароль VNC:** \`$VNC_PASS\`
           - Игра: SuperTuxKart (software rendering)
           - Сессия завершится примерно: $END
