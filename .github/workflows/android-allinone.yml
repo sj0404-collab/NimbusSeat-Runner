@@ -1,0 +1,55 @@
+name: Android All-in-One APK
+on:
+  push:
+    branches: [main]
+    paths:
+      - "clients/android-allinone/**"
+      - ".github/workflows/android-allinone.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Clone moonlight-android (GPL-3.0) with submodules
+        run: |
+          git clone --branch v12.1 --depth 1 --recurse-submodules --shallow-submodules \
+            https://github.com/moonlight-stream/moonlight-android.git /tmp/moonlight
+
+      - name: Overlay NimbusSeat launcher sources
+        run: |
+          cp -r clients/android-allinone/overlay/java/* /tmp/moonlight/app/src/main/java/
+          python3 clients/android-allinone/patch_moonlight.py /tmp/moonlight
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v3
+
+      - name: Decode release keystore
+        run: echo "${{ secrets.KEYSTORE_B64 }}" | base64 -d > /tmp/nimbus.keystore
+
+      - name: Build signed release APK
+        working-directory: /tmp/moonlight
+        env:
+          NIMBUS_KEYSTORE: /tmp/nimbus.keystore
+          NIMBUS_STOREPASS: ${{ secrets.KEYSTORE_PASSWORD }}
+          NIMBUS_KEYALIAS: ${{ secrets.KEY_ALIAS }}
+        run: ./gradlew assembleNonRootRelease --no-daemon --stacktrace
+
+      - name: Collect APK
+        run: |
+          apk=$(find /tmp/moonlight/app/build/outputs/apk -name "*.apk" | head -1)
+          echo "found: $apk"
+          cp "$apk" /tmp/NimbusSeat-allinone-release.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NimbusSeat-allinone-release-apk
+          path: /tmp/NimbusSeat-allinone-release.apk
+          if-no-files-found: error
