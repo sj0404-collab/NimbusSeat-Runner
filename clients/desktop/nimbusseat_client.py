@@ -130,6 +130,13 @@ class Cloud:
             return None
         return self._gh().read_session(target)
 
+    def open_url(self, session):
+        """Address to open for the active target, decorated (noVNC autoconnect
+        + fit, hub gate as ?zt=)."""
+        target = self.target() or {}
+        url = (session or {}).get("url") or (session or {}).get("novnc")
+        return nt.novnc_url(url, target.get("gate", ""))
+
     def session_source(self):
         target = self.target() or {}
         session = target.get("session") or {}
@@ -315,8 +322,9 @@ class App(tk.Tk):
             return
         def w():
             s = self.cloud.session()
-            if s and s.get("live") and s.get("url"):
-                webbrowser.open(nt.novnc_url(s["url"]))
+            url = self.cloud.open_url(s)
+            if s and s.get("live") and url:
+                webbrowser.open(url)
             else:
                 messagebox.showinfo("NimbusSeat", "Сессия ещё не live — подождите или запустите раннер")
         threading.Thread(target=w, daemon=True).start()
@@ -373,6 +381,7 @@ class TargetsDialog(tk.Toplevel):
         self.v_branch = tk.StringVar()
         self.v_path = tk.StringVar()
         self.v_inputs = tk.StringVar()
+        self.v_gate = tk.StringVar()
 
         self.pick = ttk.Combobox(self, width=30, state="readonly",
                                  values=cloud.names())
@@ -384,7 +393,7 @@ class TargetsDialog(tk.Toplevel):
         rows = [("Название", self.v_name), ("repo (owner/name)", self.v_repo),
                 ("GitHub token", self.v_token), ("workflow (файл в .github)", self.v_workflow),
                 ("Ветка сессии", self.v_branch), ("Файл сессии", self.v_path),
-                ("inputs (JSON)", self.v_inputs)]
+                ("inputs (JSON)", self.v_inputs), ("Гейт хаба (?zt=)", self.v_gate)]
         for i, (label, var) in enumerate(rows, start=1):
             ttk.Label(self, text=label).grid(row=i, column=0, sticky="e", padx=6, pady=2)
             show = "*" if var is self.v_token else ""
@@ -414,6 +423,7 @@ class TargetsDialog(tk.Toplevel):
         self.v_workflow.set(t.get("workflow", nt.NIMBUS_WORKFLOW))
         self.v_branch.set(session.get("branch", "live"))
         self.v_path.set(session.get("path", "session.json"))
+        self.v_gate.set(t.get("gate", ""))
         self.v_inputs.set(json.dumps(t.get("inputs") or {}, ensure_ascii=False))
 
     def save(self):
@@ -427,6 +437,7 @@ class TargetsDialog(tk.Toplevel):
             "repo": self.v_repo.get().strip(),
             "token": "",
             "workflow": self.v_workflow.get().strip() or nt.NIMBUS_WORKFLOW,
+            "gate": self.v_gate.get().strip(),
             "inputs": inputs,
             "session": {"branch": self.v_branch.get().strip() or "live",
                         "path": self.v_path.get().strip() or "session.json"},
@@ -446,7 +457,7 @@ class TargetsDialog(tk.Toplevel):
     def new(self):
         self.pick.set("")
         for var in (self.v_name, self.v_repo, self.v_workflow, self.v_branch,
-                    self.v_path, self.v_inputs):
+                    self.v_path, self.v_inputs, self.v_gate):
             var.set("")
         self.v_workflow.set(nt.NIMBUS_WORKFLOW)
         self.v_branch.set("live")

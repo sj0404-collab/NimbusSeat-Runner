@@ -39,9 +39,10 @@ NIMBUS_WORKFLOW = "remote-seat.yml"
 NOVNC_PAGES = ("vnc.html", "vnc_lite.html")
 
 # Keys a session descriptor may use for the address the client should open, in
-# preference order. Both "novncUrl" (zen-panel) and "novnc" (NimbusSeat) are
-# covered, plus a plain "url"/"web"/"desktop" from any future publisher.
-URL_KEYS = ("url", "novncUrl", "novnc", "web", "desktop", "hubUrl")
+# preference order. "mobile" (zen-panel's phone page: screen + audio + virtual
+# mouse) wins over the plain "url"; both "novncUrl" (zen-panel) and "novnc"
+# (NimbusSeat) are covered, plus "web"/"desktop"/"hubUrl" from any publisher.
+URL_KEYS = ("mobile", "url", "novncUrl", "novnc", "web", "desktop", "hubUrl")
 
 # Two built-in targets so a fresh install can pick either without typing
 # anything. Only repo/token are tied to an account; editing the name/token in
@@ -55,11 +56,11 @@ DEFAULT_TARGETS = [
         "session": {"branch": "live", "path": "session.json"},
     },
     {
-        "name": "zen-panel screen",
+        "name": "zen-panel hub",
         "repo": "sj0404-collab/zen-panel",
         "workflow": "hub.yml",
         "inputs": {"os": "linux", "label": "panel"},
-        "session": {"branch": "session-state", "path": "live/session-vnc.json"},
+        "session": {"branch": "session-state", "path": "live/session-hub-linux.json"},
     },
 ]
 
@@ -75,23 +76,31 @@ def extract_url(data) -> str | None:
     return None
 
 
-def novnc_url(url: str | None) -> str | None:
-    """Make an unconfigured noVNC page actually show the screen.
+def novnc_url(url: str | None, gate: str = "") -> str | None:
+    """Decorate an address so it really shows the seat.
 
-    A bare ``vnc.html`` stops on a "Connect" dialog (a dark screen users read as
-    "black") and renders the remote at 1:1 - on a phone that is one dark corner.
-    For a noVNC page with no query of its own we add ``autoconnect=1`` and
-    ``resize=scale`` so it connects at once and fits the viewport. Any existing
-    query (e.g. a password or a custom path) is left untouched.
+    Two things get fixed here, both learned the hard way:
+
+    * A bare noVNC page (``vnc.html``) stops on a dark "Connect" dialog and
+      renders the remote 1:1 - on a phone that is one dark corner. Add
+      ``autoconnect=1&resize=scale`` so it connects at once and fits.
+    * zen-panel's hub is behind a gate: without ``?zt=<token>`` every page,
+      API call and audio socket answers 401. The target's ``gate`` is the
+      token that was passed to the hub job, so it is added as ``zt``.
+
+    Any existing query is preserved, so a password or a custom path survives.
     """
     if not url:
         return url
     parts = urllib.parse.urlsplit(url)
-    if not parts.path.endswith(NOVNC_PAGES):
-        return url
     params = dict(urllib.parse.parse_qsl(parts.query, keep_blank_values=True))
-    params.setdefault("autoconnect", "1")
-    params.setdefault("resize", "scale")
+    if parts.path.endswith(NOVNC_PAGES):
+        params.setdefault("autoconnect", "1")
+        params.setdefault("resize", "scale")
+    if gate:
+        params.setdefault("zt", gate)
+    if not params:
+        return url
     return urllib.parse.urlunsplit(
         parts._replace(query=urllib.parse.urlencode(params))
     )
@@ -131,6 +140,9 @@ def _normalize_target(target: dict) -> dict:
     target.setdefault("repo", "")
     target.setdefault("workflow", NIMBUS_WORKFLOW)
     target.setdefault("token", "")
+    # Gate token of a gated hub (zen-panel answers 401 without it). Same value
+    # is passed to the hub job as its `token` input and added to the url as ?zt=.
+    target.setdefault("gate", "")
     inputs = target.get("inputs")
     target["inputs"] = dict(inputs) if isinstance(inputs, dict) else {}
     session = target.get("session")
@@ -246,6 +258,11 @@ class GitHub:
             for key, value in overrides.items():
                 if key in inputs:
                     inputs[key] = value
+        # A gate is only a gate if the hub was started with it, so send it as
+        # the job's `token` input unless the target already set one.
+        gate = target.get("gate") or ""
+        if gate and not inputs.get("token"):
+            inputs["token"] = gate
         code, _ = self._req(
             "POST",
             f"/repos/{target['repo']}/actions/workflows/{target['workflow']}"

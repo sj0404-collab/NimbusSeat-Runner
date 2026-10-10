@@ -53,7 +53,10 @@ import java.net.URL;
 public class CloudSeatActivity extends Activity {
 
     private static final String PREFS = "nimbus_cloud";
-    private static final String[] URL_KEYS = {"url", "novncUrl", "novnc", "web", "desktop", "hubUrl"};
+    // "mobile" is zen-panel's phone page (screen + audio + virtual mouse); it
+    // wins over the plain "url", which for a hub is the tools dashboard.
+    private static final String[] URL_KEYS =
+            {"mobile", "url", "novncUrl", "novnc", "web", "desktop", "hubUrl"};
 
     private SharedPreferences prefs;
     private final Handler ui = new Handler(Looper.getMainLooper());
@@ -205,6 +208,9 @@ public class CloudSeatActivity extends Activity {
     private String branch()     { return prefs.getString("session_branch", "live"); }
     private String sessionPath(){ return prefs.getString("session_path", "session.json"); }
     private String inputs()     { return prefs.getString("inputs", "{\"minutes\":\"340\"}"); }
+    /** Gate token of a gated hub: sent to the job as its `token` input and
+        added to every url as ?zt= (without it a hub answers 401 everywhere). */
+    private String gate()       { return prefs.getString("gate", ""); }
 
     private void showConfig() {
         LinearLayout box = new LinearLayout(this);
@@ -219,7 +225,7 @@ public class CloudSeatActivity extends Activity {
         nimbus.setText("NimbusSeat");
         nimbus.setAllCaps(false);
         Button zen = new Button(this);
-        zen.setText("zen-panel экран");
+        zen.setText("zen-panel хаб");
         zen.setAllCaps(false);
         presets.addView(nimbus);
         presets.addView(zen);
@@ -233,8 +239,9 @@ public class CloudSeatActivity extends Activity {
         box.addView(t);
         EditText wf = field(box, "workflow file (e.g. remote-seat.yml / hub.yml)", workflow());
         EditText br = field(box, "session branch (live / session-state)", branch());
-        EditText sp = field(box, "session file (session.json / live/session-vnc.json)", sessionPath());
+        EditText sp = field(box, "session file (session.json / live/session-hub-linux.json)", sessionPath());
         EditText in = field(box, "dispatch inputs (JSON)", inputs());
+        EditText gt = field(box, "Гейт хаба ?zt= (пусто = без гейта)", gate());
 
         nimbus.setOnClickListener(v -> {
             r.setText("sj0404-collab/NimbusSeat-Runner");
@@ -242,13 +249,15 @@ public class CloudSeatActivity extends Activity {
             br.setText("live");
             sp.setText("session.json");
             in.setText("{\"minutes\":\"340\"}");
+            gt.setText("");
         });
         zen.setOnClickListener(v -> {
             r.setText("sj0404-collab/zen-panel");
             wf.setText("hub.yml");
             br.setText("session-state");
-            sp.setText("live/session-vnc.json");
+            sp.setText("live/session-hub-linux.json");
             in.setText("{\"os\":\"linux\",\"label\":\"panel\"}");
+            gt.setText("");
         });
 
         new AlertDialog.Builder(this)
@@ -264,6 +273,7 @@ public class CloudSeatActivity extends Activity {
                                 .putString("session_branch", br.getText().toString().trim())
                                 .putString("session_path", sp.getText().toString().trim())
                                 .putString("inputs", in.getText().toString().trim())
+                                .putString("gate", gt.getText().toString().trim())
                                 .apply())
                 .setNegativeButton("Отмена", null)
                 .show();
@@ -322,7 +332,11 @@ public class CloudSeatActivity extends Activity {
             JSONObject body = new JSONObject();
             try {
                 body.put("ref", "main");
-                body.put("inputs", new JSONObject(inputs()));
+                JSONObject in = new JSONObject(inputs());
+                // A gate only gates if the hub was started with it: send it as
+                // the job's own `token` input.
+                if (!gate().isEmpty() && !in.has("token")) in.put("token", gate());
+                body.put("inputs", in);
             } catch (Exception ignored) {}
             JSONObject r = gh("POST",
                     "/repos/" + repo() + "/actions/workflows/" + workflow() + "/dispatches", body);
@@ -392,15 +406,22 @@ public class CloudSeatActivity extends Activity {
     }
 
     /**
-     * A bare noVNC page stops on a dark "Connect" dialog and renders the remote
-     * 1:1 (on a phone: one dark corner) unless told to autoconnect and fit. Add
-     * both for a noVNC page that carries no query of its own.
+     * Decorate an address so it really shows the seat: auto-connect and fit a
+     * noVNC page (a bare vnc.html stops on a dark "Connect" dialog at 1:1) and
+     * open a gated hub with ?zt= (without it every page answers 401). An
+     * existing query is preserved.
      */
     private String decorateNovnc(String u) {
         if (u == null) return null;
-        if (!u.contains("vnc.html") && !u.contains("vnc_lite.html")) return u;
-        if (u.contains("autoconnect=")) return u;
-        return u + (u.contains("?") ? "&" : "?") + "autoconnect=1&resize=scale";
+        boolean novnc = u.contains("vnc.html") || u.contains("vnc_lite.html");
+        if (!novnc && gate().isEmpty()) return u;
+        StringBuilder sb = new StringBuilder(u);
+        if (novnc) {
+            if (!u.contains("autoconnect=")) sb.append(sb.toString().contains("?") ? "&autoconnect=1" : "?autoconnect=1");
+            if (!u.contains("resize=")) sb.append(sb.toString().contains("?") || sb.toString().contains("autoconnect=") ? "&resize=scale" : "?resize=scale");
+        }
+        if (!gate().isEmpty() && !u.contains("zt=")) sb.append(sb.toString().contains("?") ? "&zt=" : "?zt=").append(gate());
+        return sb.toString();
     }
 
     /** The live descriptor from the target's branch/path - address already inside. */

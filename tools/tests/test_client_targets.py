@@ -64,7 +64,10 @@ def test_migrate_legacy_single_seat():
 def test_migrate_empty_uses_defaults():
     cfg = nt.migrate_config({})
     names = [t["name"] for t in cfg["targets"]]
-    assert "NimbusSeat" in names and "zen-panel screen" in names
+    assert "NimbusSeat" in names and "zen-panel hub" in names
+    hub = [t for t in cfg["targets"] if t["name"] == "zen-panel hub"][0]
+    assert hub["session"]["path"] == "live/session-hub-linux.json"
+    assert hub["session"]["branch"] == "session-state"
     assert cfg["active"] == names[0]
 
 
@@ -125,3 +128,50 @@ def test_novnc_url_keeps_existing_query():
 def test_novnc_url_leaves_non_novnc_untouched():
     assert nt.novnc_url("https://h/nimbus.html?pw=x") == "https://h/nimbus.html?pw=x"
     assert nt.novnc_url(None) is None
+
+
+def test_novnc_url_adds_hub_gate_for_any_page():
+    # A gated hub answers 401 on pages, api and audio unless ?zt= is present.
+    assert nt.novnc_url("https://h/m", "tok") == "https://h/m?zt=tok"
+    assert nt.novnc_url("https://h/vnc.html", "tok") == \
+        "https://h/vnc.html?autoconnect=1&resize=scale&zt=tok"
+
+
+def test_novnc_url_keeps_existing_gate():
+    out = nt.novnc_url("https://h/m?zt=already", "tok")
+    assert out == "https://h/m?zt=already"
+
+
+def test_dispatch_passes_gate_as_token_input(monkeypatch):
+    seen = {}
+
+    def fake_req(self, method, path, body=None):
+        seen["body"] = body
+        seen["path"] = path
+        return 204, {}
+
+    monkeypatch.setattr(nt.GitHub, "_req", fake_req)
+    nt.GitHub("t").dispatch({
+        "repo": "o/r", "workflow": "hub.yml", "inputs": {"os": "linux"},
+        "gate": "secret",
+    })
+    assert seen["path"] == "/repos/o/r/actions/workflows/hub.yml/dispatches"
+    assert seen["body"]["inputs"]["token"] == "secret"
+    assert seen["body"]["inputs"]["os"] == "linux"
+
+
+def test_dispatch_leaves_inputs_alone_without_gate(monkeypatch):
+    seen = {}
+
+    def fake_req(self, method, path, body=None):
+        seen["body"] = body
+        return 204, {}
+
+    monkeypatch.setattr(nt.GitHub, "_req", fake_req)
+    nt.GitHub("t").dispatch({"repo": "o/r", "workflow": "hub.yml",
+                             "inputs": {"os": "linux"}})
+    assert "token" not in seen["body"]["inputs"]
+
+
+def test_mobile_url_wins_over_plain_url():
+    assert nt.extract_url({"mobile": "https://h/m", "url": "https://h/"}) == "https://h/m"
