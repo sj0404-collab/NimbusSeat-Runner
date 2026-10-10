@@ -105,3 +105,23 @@ def test_empty_token_sends_no_authorization(monkeypatch):
 
 def test_token_is_sent_when_present(monkeypatch):
     assert _capture_auth(monkeypatch, "abc") == "token abc"
+
+
+def test_novnc_url_adds_autoconnect_and_scale():
+    # zen-panel publishes a bare vnc.html: without this it shows a dark
+    # Connect dialog at 1:1 instead of the desktop.
+    assert nt.novnc_url("https://h/vnc.html") == \
+        "https://h/vnc.html?autoconnect=1&resize=scale"
+    assert nt.novnc_url("https://h/path/vnc_lite.html") == \
+        "https://h/path/vnc_lite.html?autoconnect=1&resize=scale"
+
+
+def test_novnc_url_keeps_existing_query():
+    out = nt.novnc_url("https://h/vnc.html?password=secret")
+    assert "password=secret" in out
+    assert "autoconnect=1" in out and "resize=scale" in out
+
+
+def test_novnc_url_leaves_non_novnc_untouched():
+    assert nt.novnc_url("https://h/nimbus.html?pw=x") == "https://h/nimbus.html?pw=x"
+    assert nt.novnc_url(None) is None

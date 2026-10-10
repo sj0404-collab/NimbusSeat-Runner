@@ -316,7 +316,7 @@ class App(tk.Tk):
         def w():
             s = self.cloud.session()
             if s and s.get("live") and s.get("url"):
-                webbrowser.open(s["url"])
+                webbrowser.open(nt.novnc_url(s["url"]))
             else:
                 messagebox.showinfo("NimbusSeat", "Сессия ещё не live — подождите или запустите раннер")
         threading.Thread(target=w, daemon=True).start()

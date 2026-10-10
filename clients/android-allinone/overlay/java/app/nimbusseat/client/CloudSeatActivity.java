@@ -364,9 +364,9 @@ public class CloudSeatActivity extends Activity {
                 JSONObject s = readSession();
                 String url = urlOf(s);
                 if (s != null && isLive(s) && url != null && !url.equals(prev)) {
-                    liveUrl = url;
+                    liveUrl = decorateNovnc(url);
                     ui.post(() -> { status.setText("✅ Подключено — ПК активирован");
-                        web.loadUrl(url); setPanel(false); });
+                        web.loadUrl(liveUrl); setPanel(false); });
                     return;
                 }
             }
@@ -389,6 +389,18 @@ public class CloudSeatActivity extends Activity {
             if (v.startsWith("http://") || v.startsWith("https://")) return v;
         }
         return null;
+    }
+
+    /**
+     * A bare noVNC page stops on a dark "Connect" dialog and renders the remote
+     * 1:1 (on a phone: one dark corner) unless told to autoconnect and fit. Add
+     * both for a noVNC page that carries no query of its own.
+     */
+    private String decorateNovnc(String u) {
+        if (u == null) return null;
+        if (!u.contains("vnc.html") && !u.contains("vnc_lite.html")) return u;
+        if (u.contains("autoconnect=")) return u;
+        return u + (u.contains("?") ? "&" : "?") + "autoconnect=1&resize=scale";
     }
 
     /** The live descriptor from the target's branch/path - address already inside. */
@@ -416,11 +428,11 @@ public class CloudSeatActivity extends Activity {
             final String state = s == null ? "" : s.optString("state", "");
             ui.post(() -> {
                 if (url != null) {
-                    liveUrl = url;
+                    liveUrl = decorateNovnc(url);
                     status.setText(state.isEmpty() || "live".equals(state)
                             ? "✅ Сессия live"
                             : "⚠️ Сессия: " + state);
-                    web.loadUrl(url);
+                    web.loadUrl(liveUrl);
                     setPanel(!fullScreen);
                 } else {
                     status.setText("Адреса сессии нет — запустите раннер или проверьте цель");

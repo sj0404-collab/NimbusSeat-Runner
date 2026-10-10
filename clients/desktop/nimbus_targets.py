@@ -26,12 +26,17 @@ from __future__ import annotations
 import base64
 import json
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
 GH = "https://api.github.com"
 
 NIMBUS_WORKFLOW = "remote-seat.yml"
+
+# noVNC page names that stop on a "Connect" dialog (a dark screen the user reads
+# as "black") and render the remote 1:1 unless told to fit. See novnc_url().
+NOVNC_PAGES = ("vnc.html", "vnc_lite.html")
 
 # Keys a session descriptor may use for the address the client should open, in
 # preference order. Both "novncUrl" (zen-panel) and "novnc" (NimbusSeat) are
@@ -68,6 +73,28 @@ def extract_url(data) -> str | None:
         if isinstance(value, str) and value.startswith(("http://", "https://")):
             return value
     return None
+
+
+def novnc_url(url: str | None) -> str | None:
+    """Make an unconfigured noVNC page actually show the screen.
+
+    A bare ``vnc.html`` stops on a "Connect" dialog (a dark screen users read as
+    "black") and renders the remote at 1:1 - on a phone that is one dark corner.
+    For a noVNC page with no query of its own we add ``autoconnect=1`` and
+    ``resize=scale`` so it connects at once and fits the viewport. Any existing
+    query (e.g. a password or a custom path) is left untouched.
+    """
+    if not url:
+        return url
+    parts = urllib.parse.urlsplit(url)
+    if not parts.path.endswith(NOVNC_PAGES):
+        return url
+    params = dict(urllib.parse.parse_qsl(parts.query, keep_blank_values=True))
+    params.setdefault("autoconnect", "1")
+    params.setdefault("resize", "scale")
+    return urllib.parse.urlunsplit(
+        parts._replace(query=urllib.parse.urlencode(params))
+    )
 
 
 def normalize_session(data) -> dict:
