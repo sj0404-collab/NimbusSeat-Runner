@@ -83,3 +83,25 @@ def test_find_target():
     assert nt.find_target(cfg)["name"] == "B"
     assert nt.find_target(cfg, "A")["name"] == "A"
     assert nt.find_target({"targets": []}) is None
+
+
+def _capture_auth(monkeypatch, token):
+    seen = {}
+
+    def fake_urlopen(req, timeout=0):
+        seen["auth"] = req.get_header("Authorization")
+        raise OSError("stop")
+
+    monkeypatch.setattr(nt.urllib.request, "urlopen", fake_urlopen)
+    nt.GitHub(token)._req("GET", "/repos/o/r/contents/x")
+    return seen["auth"]
+
+
+def test_empty_token_sends_no_authorization(monkeypatch):
+    # A bare `Authorization: token ` makes GitHub 401 even on public repos,
+    # so a tokenless client must not send the header at all.
+    assert _capture_auth(monkeypatch, "") is None
+
+
+def test_token_is_sent_when_present(monkeypatch):
+    assert _capture_auth(monkeypatch, "abc") == "token abc"

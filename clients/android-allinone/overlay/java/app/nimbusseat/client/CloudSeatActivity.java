@@ -3,8 +3,10 @@ package app.nimbusseat.client;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -18,6 +20,7 @@ import android.webkit.WebChromeClient;
 import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -57,14 +60,28 @@ public class CloudSeatActivity extends Activity {
 
     private TextView status;
     private WebView web;
+    private View stage;
+    private View previewOverlay;
     private LinearLayout controls;
+    private View controlsPane;
+    private LinearLayout.LayoutParams webLp;
+    private int previewHeightPx;
     private boolean controlsExpanded = true;
     private String liveUrl = null;
 
-    /** Show/hide the whole control panel; hidden => stream is fullscreen. */
-    private void setPanel(boolean expand) {
-        controlsExpanded = expand;
-        controls.setVisibility(expand ? View.VISIBLE : View.GONE);
+    /**
+     * Show/hide the control panel. Panel visible => the stream sits in a short
+     * preview box (tap it to expand); hidden => stream is fullscreen.
+     */
+    private void setPanel(boolean preview) {
+        controlsExpanded = preview;
+        controlsPane.setVisibility(preview ? View.VISIBLE : View.GONE);
+        previewOverlay.setVisibility(preview && liveUrl != null ? View.VISIBLE : View.GONE);
+        if (webLp != null && stage != null) {
+            webLp.height = preview ? previewHeightPx : 0;
+            webLp.weight = preview ? 0f : 1f;
+            stage.setLayoutParams(webLp);
+        }
     }
 
     @Override
@@ -99,9 +116,17 @@ public class CloudSeatActivity extends Activity {
         start.setOnClickListener(v -> dispatchRunner());
         controls.addView(start, lp());
 
-        Button connect = btn("🔗 Подключиться");
-        connect.setOnClickListener(v -> fetchSession(true));
-        controls.addView(connect, lp());
+        Button preview = btn("🔗 Предпросмотр");
+        preview.setOnClickListener(v -> connect(false, false));
+        controls.addView(preview, lp());
+
+        Button full = btn("⛶ На весь экран");
+        full.setOnClickListener(v -> connect(true, false));
+        controls.addView(full, lp());
+
+        Button link = btn("↗ Ссылка в браузере");
+        link.setOnClickListener(v -> openExternal());
+        controls.addView(link, lp());
 
         Button stop = btn("⏹ Остановить раннер");
         stop.setOnClickListener(v -> stopRunner());
@@ -111,18 +136,38 @@ public class CloudSeatActivity extends Activity {
         cfg.setOnClickListener(v -> showConfig());
         controls.addView(cfg, lp());
 
-        root.addView(controls, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT));
-
         web = new WebView(this);
         configureWeb();
-        LinearLayout.LayoutParams wlp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1);
-        root.addView(web, wlp);
+
+        previewOverlay = new View(this);
+        previewOverlay.setBackgroundColor(Color.TRANSPARENT);
+        previewOverlay.setVisibility(View.GONE);
+        previewOverlay.setOnClickListener(v -> setPanel(false));
+
+        FrameLayout stageBox = new FrameLayout(this);
+        stageBox.addView(web, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT));
+        stageBox.addView(previewOverlay, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT));
+        stage = stageBox;
+
+        previewHeightPx = (int) (getResources().getDisplayMetrics().heightPixels * 0.45f);
+        webLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, previewHeightPx);
+        root.addView(stage, webLp);
+
+        android.widget.ScrollView panel = new android.widget.ScrollView(this);
+        panel.addView(controls, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT));
+        controlsPane = panel;
+        root.addView(controlsPane, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
 
         setContentView(root);
-        fetchSession(false);   // авто: если сессия уже live — сразу покажем
+        connect(true, true);   // авто: если сессия уже live — сразу покажем
     }
 
     private LinearLayout.LayoutParams lp() {
@@ -240,7 +285,11 @@ public class CloudSeatActivity extends Activity {
             HttpURLConnection c = (HttpURLConnection)
                     new URL("https://api.github.com" + path).openConnection();
             c.setRequestMethod(method);
-            c.setRequestProperty("Authorization", "token " + token());
+            // A bare `Authorization: token ` makes GitHub reject even public
+            // repos with 401, so only authenticate when a token is present.
+            if (!token().isEmpty()) {
+                c.setRequestProperty("Authorization", "token " + token());
+            }
             c.setRequestProperty("Accept", "application/vnd.github+json");
             c.setConnectTimeout(10000);
             c.setReadTimeout(10000);
@@ -279,7 +328,7 @@ public class CloudSeatActivity extends Activity {
                     "/repos/" + repo() + "/actions/workflows/" + workflow() + "/dispatches", body);
             boolean ok = r != null && r.optInt("_http") == 204;
             ui.post(() -> status.setText(ok
-                    ? "Раннер запускается (1-3 мин). Жмите «Подключиться»…"
+                    ? "Раннер запускается (1-3 мин). Жмите «Предпросмотр»…"
                     : "Ошибка запуска: проверьте repo/workflow/токен"));
             if (ok) pollUntilLive();
         }).start();
@@ -355,22 +404,46 @@ public class CloudSeatActivity extends Activity {
         }
     }
 
-    private void fetchSession(boolean loud) {
+    /**
+     * Read the live descriptor and embed it in the preview (or fullscreen).
+     * Never reports "runner off" while an address is actually present: some
+     * publishers carry only a URL, without a `state`.
+     */
+    private void connect(boolean fullScreen, boolean quiet) {
         new Thread(() -> {
             JSONObject s = readSession();
             final String url = urlOf(s);
+            final String state = s == null ? "" : s.optString("state", "");
             ui.post(() -> {
-                if (isLive(s) && url != null) {
+                if (url != null) {
                     liveUrl = url;
-                    status.setText("✅ Сессия live");
+                    status.setText(state.isEmpty() || "live".equals(state)
+                            ? "✅ Сессия live"
+                            : "⚠️ Сессия: " + state);
                     web.loadUrl(url);
-                    setPanel(false);
-                } else if (loud) {
-                    Toast.makeText(this, "Сессия не запущена — нажмите «Запустить раннер»",
-                            Toast.LENGTH_LONG).show();
+                    setPanel(!fullScreen);
+                } else {
+                    status.setText("Адреса сессии нет — запустите раннер или проверьте цель");
+                    if (!quiet) {
+                        Toast.makeText(this,
+                                "Нет адреса сессии. Проверьте repo/branch/path и токен",
+                                Toast.LENGTH_LONG).show();
+                    }
                 }
             });
         }).start();
+    }
+
+    private void openExternal() {
+        if (liveUrl == null) {
+            Toast.makeText(this, "Сначала подключитесь", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(liveUrl)));
+        } catch (Exception e) {
+            Toast.makeText(this, "Нет браузера", Toast.LENGTH_SHORT).show();
+        }
     }
 
     private long lastBack = 0;

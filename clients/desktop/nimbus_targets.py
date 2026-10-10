@@ -177,14 +177,16 @@ class GitHub:
         self.token = token or ""
 
     def _req(self, method: str, path: str, body: dict | None = None):
+        # Public repos must read fine with no token: GitHub answers 401 to a
+        # bare `Authorization: token ` header, so only send it when present.
+        headers = {"Accept": "application/vnd.github+json"}
+        if self.token:
+            headers["Authorization"] = f"token {self.token}"
         req = urllib.request.Request(
             GH + path,
             method=method,
             data=json.dumps(body).encode() if body is not None else None,
-            headers={
-                "Authorization": f"token {self.token}",
-                "Accept": "application/vnd.github+json",
-            },
+            headers=headers,
         )
         try:
             with urllib.request.urlopen(req, timeout=20) as resp:
