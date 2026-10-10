@@ -16,6 +16,15 @@ GitHub Actions (workflow `Android All-in-One APK`):
 4. собирает `assembleNonRootRelease` и подписывает **release-ключом**
    (keystore хранится в GitHub Secrets).
 
+## Облачный экран: любая цель
+
+Экран «Облако» не зашит на один репозиторий. В ⚙ задаются `repo`, `token`,
+`workflow`, ветка и файл сессии, и `inputs` запуска в JSON — то есть один APK
+может подключаться и к NimbusSeat-Runner, и к экрану `zen-panel`, и к форку.
+Два пресета (NimbusSeat / zen-panel экран) переключают цель одним тапом.
+Понимаются оба формата сессии (`session.json` на `live`, `live/session-*.json`
+на `session-state`); адрес берётся из `url`/`novncUrl`/`novnc`/`web`.
+
 ## Лицензия
 
 Итоговый APK — производная работа от moonlight-android → распространяется по

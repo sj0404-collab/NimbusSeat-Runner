@@ -32,17 +32,26 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 
 /**
- * Cloud seat: controls the GitHub-runner-based remote desktop and connects
- * to it inside an embedded WebView (nimbus.html with touch gamepad,
- * BT/OTG passthrough, virtual keyboard and quality settings).
+ * Cloud seat: controls a GitHub-runner-based remote desktop and connects to it
+ * inside an embedded WebView (nimbus.html with touch gamepad, BT/OTG
+ * passthrough, virtual keyboard and quality settings).
  *
- * The GitHub repo and token are user-configurable and stored locally, so the
- * app keeps working even if the original account/repo is gone - just point
- * it at a new mirror (docs/MIGRATION.md).
+ * The target is data, not a hardcoded repo: repo + token + workflow + where the
+ * live session descriptor lives. That is what lets one app point at ANY repo
+ * and runner - its own NimbusSeat-Runner, a `zen-panel` screen, a fork, a
+ * mirror (see docs/MIGRATION.md) - and it keeps working if the account moves.
+ *
+ * Two session layouts are understood without any extra wiring:
+ *   NimbusSeat  branch `live`,          file `session.json`     url = nimbus.html
+ *   zen-panel   branch `session-state`, file `live/session-vnc.json` url = vnc.html
+ * The address is taken from url / novncUrl / novnc / web; the state falls back
+ * to "live when an address is present".
  */
 public class CloudSeatActivity extends Activity {
 
     private static final String PREFS = "nimbus_cloud";
+    private static final String[] URL_KEYS = {"url", "novncUrl", "novnc", "web", "desktop", "hubUrl"};
+
     private SharedPreferences prefs;
     private final Handler ui = new Handler(Looper.getMainLooper());
 
@@ -98,7 +107,7 @@ public class CloudSeatActivity extends Activity {
         stop.setOnClickListener(v -> stopRunner());
         controls.addView(stop, lp());
 
-        Button cfg = btn("⚙ Repo / токен");
+        Button cfg = btn("⚙ Репо / workflow / сессия");
         cfg.setOnClickListener(v -> showConfig());
         controls.addView(cfg, lp());
 
@@ -143,31 +152,85 @@ public class CloudSeatActivity extends Activity {
         web.setWebChromeClient(new WebChromeClient());
     }
 
-    private String repo()  { return prefs.getString("repo", "sj0404-collab/NimbusSeat-Runner"); }
-    private String token() { return prefs.getString("token", ""); }
+    /* ---------------- target configuration ---------------- */
+
+    private String repo()       { return prefs.getString("repo", "sj0404-collab/NimbusSeat-Runner"); }
+    private String token()      { return prefs.getString("token", ""); }
+    private String workflow()   { return prefs.getString("workflow", "remote-seat.yml"); }
+    private String branch()     { return prefs.getString("session_branch", "live"); }
+    private String sessionPath(){ return prefs.getString("session_path", "session.json"); }
+    private String inputs()     { return prefs.getString("inputs", "{\"minutes\":\"340\"}"); }
 
     private void showConfig() {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
         int p = (int) (16 * getResources().getDisplayMetrics().density);
         box.setPadding(p, p, p, p);
-        EditText r = new EditText(this);
-        r.setHint("owner/repo");
-        r.setText(repo());
+
+        // Presets flip the whole target in one tap; everything stays editable.
+        LinearLayout presets = new LinearLayout(this);
+        presets.setOrientation(LinearLayout.HORIZONTAL);
+        Button nimbus = new Button(this);
+        nimbus.setText("NimbusSeat");
+        nimbus.setAllCaps(false);
+        Button zen = new Button(this);
+        zen.setText("zen-panel экран");
+        zen.setAllCaps(false);
+        presets.addView(nimbus);
+        presets.addView(zen);
+        box.addView(presets);
+
+        EditText r = field(box, "owner/repo", repo());
         EditText t = new EditText(this);
         t.setHint("GitHub token (fine-grained: Actions RW, Contents R)");
         t.setText(token());
         t.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        box.addView(r); box.addView(t);
+        box.addView(t);
+        EditText wf = field(box, "workflow file (e.g. remote-seat.yml / hub.yml)", workflow());
+        EditText br = field(box, "session branch (live / session-state)", branch());
+        EditText sp = field(box, "session file (session.json / live/session-vnc.json)", sessionPath());
+        EditText in = field(box, "dispatch inputs (JSON)", inputs());
+
+        nimbus.setOnClickListener(v -> {
+            r.setText("sj0404-collab/NimbusSeat-Runner");
+            wf.setText("remote-seat.yml");
+            br.setText("live");
+            sp.setText("session.json");
+            in.setText("{\"minutes\":\"340\"}");
+        });
+        zen.setOnClickListener(v -> {
+            r.setText("sj0404-collab/zen-panel");
+            wf.setText("hub.yml");
+            br.setText("session-state");
+            sp.setText("live/session-vnc.json");
+            in.setText("{\"os\":\"linux\",\"label\":\"panel\"}");
+        });
+
         new AlertDialog.Builder(this)
-                .setTitle("Настройки облака")
-                .setMessage("Если аккаунт GitHub закроется — укажите новое зеркало и новый токен (см. docs/MIGRATION.md)")
+                .setTitle("Настройки облака (цель)")
+                .setMessage("Репо + workflow + откуда брать живую сессию. Так один клиент "
+                        + "подключается к любому репо/раннеру (docs/MIGRATION.md).")
                 .setView(box)
-                .setPositiveButton("Сохранить", (d, w) ->
-                        prefs.edit().putString("repo", r.getText().toString().trim())
-                                .putString("token", t.getText().toString().trim()).apply())
+                .setPositiveButton("Сохранить", (d, wd) ->
+                        prefs.edit()
+                                .putString("repo", r.getText().toString().trim())
+                                .putString("token", t.getText().toString().trim())
+                                .putString("workflow", wf.getText().toString().trim())
+                                .putString("session_branch", br.getText().toString().trim())
+                                .putString("session_path", sp.getText().toString().trim())
+                                .putString("inputs", in.getText().toString().trim())
+                                .apply())
                 .setNegativeButton("Отмена", null)
                 .show();
+    }
+
+    private EditText field(LinearLayout parent, String hint, String value) {
+        EditText e = new EditText(this);
+        e.setHint(hint);
+        e.setText(value);
+        e.setInputType(InputType.TYPE_CLASS_TEXT);
+        parent.addView(e);
+        return e;
     }
 
     /* ---------------- GitHub API ---------------- */
@@ -210,16 +273,14 @@ public class CloudSeatActivity extends Activity {
             JSONObject body = new JSONObject();
             try {
                 body.put("ref", "main");
-                JSONObject inputs = new JSONObject();
-                inputs.put("minutes", "340");
-                body.put("inputs", inputs);
+                body.put("inputs", new JSONObject(inputs()));
             } catch (Exception ignored) {}
             JSONObject r = gh("POST",
-                    "/repos/" + repo() + "/actions/workflows/remote-seat.yml/dispatches", body);
+                    "/repos/" + repo() + "/actions/workflows/" + workflow() + "/dispatches", body);
             boolean ok = r != null && r.optInt("_http") == 204;
             ui.post(() -> status.setText(ok
                     ? "Раннер запускается (1-3 мин). Жмите «Подключиться»…"
-                    : "Ошибка запуска: проверьте repo/токен"));
+                    : "Ошибка запуска: проверьте repo/workflow/токен"));
             if (ok) pollUntilLive();
         }).start();
     }
@@ -227,15 +288,17 @@ public class CloudSeatActivity extends Activity {
     private void stopRunner() {
         if (token().isEmpty()) { showConfig(); return; }
         new Thread(() -> {
-            JSONObject runs = gh("GET", "/repos/" + repo() + "/actions/runs?per_page=10", null);
+            JSONObject runs = gh("GET", "/repos/" + repo() + "/actions/runs?per_page=20", null);
             if (runs == null) return;
             try {
                 var arr = runs.getJSONArray("workflow_runs");
                 for (int i = 0; i < arr.length(); i++) {
                     JSONObject run = arr.getJSONObject(i);
                     String st = run.optString("status");
-                    if (run.optString("name").startsWith("Remote Seat")
-                            && (st.equals("queued") || st.equals("in_progress"))) {
+                    boolean active = st.equals("queued") || st.equals("in_progress");
+                    // Match by workflow path so it works for any target, not a name.
+                    boolean mine = run.optString("path").endsWith("/" + workflow());
+                    if (active && mine) {
                         gh("POST", "/repos/" + repo() + "/actions/runs/" + run.getLong("id") + "/cancel", new JSONObject());
                     }
                 }
@@ -250,9 +313,8 @@ public class CloudSeatActivity extends Activity {
             for (int i = 0; i < 40; i++) {
                 try { Thread.sleep(10000); } catch (InterruptedException e) { return; }
                 JSONObject s = readSession();
-                if (s != null && "live".equals(s.optString("state"))
-                        && !s.optString("url").equals(prev)) {
-                    final String url = s.optString("url");
+                String url = urlOf(s);
+                if (s != null && isLive(s) && url != null && !url.equals(prev)) {
                     liveUrl = url;
                     ui.post(() -> { status.setText("✅ Подключено — ПК активирован");
                         web.loadUrl(url); setPanel(false); });
@@ -263,9 +325,27 @@ public class CloudSeatActivity extends Activity {
         }).start();
     }
 
-    /** session.json из ветки live — там ссылка уже с паролем: ничего вводить не нужно. */
+    /** True when the descriptor says live (or says nothing but carries an address). */
+    private boolean isLive(JSONObject s) {
+        if (s == null) return false;
+        String state = s.optString("state", "");
+        if (!state.isEmpty()) return "live".equals(state);
+        return urlOf(s) != null;
+    }
+
+    private String urlOf(JSONObject s) {
+        if (s == null) return null;
+        for (String key : URL_KEYS) {
+            String v = s.optString(key, "");
+            if (v.startsWith("http://") || v.startsWith("https://")) return v;
+        }
+        return null;
+    }
+
+    /** The live descriptor from the target's branch/path - address already inside. */
     private JSONObject readSession() {
-        JSONObject r = gh("GET", "/repos/" + repo() + "/contents/session.json?ref=live", null);
+        JSONObject r = gh("GET",
+                "/repos/" + repo() + "/contents/" + sessionPath() + "?ref=" + branch(), null);
         if (r == null || !r.has("content")) return null;
         try {
             String json = new String(Base64.decode(r.getString("content"), Base64.DEFAULT));
@@ -278,12 +358,12 @@ public class CloudSeatActivity extends Activity {
     private void fetchSession(boolean loud) {
         new Thread(() -> {
             JSONObject s = readSession();
+            final String url = urlOf(s);
             ui.post(() -> {
-                if (s != null && "live".equals(s.optString("state"))) {
-                    liveUrl = s.optString("url");
-                    status.setText("✅ Сессия live: " + s.optString("resolution")
-                            + " @ " + s.optInt("fps") + "fps");
-                    web.loadUrl(liveUrl);
+                if (isLive(s) && url != null) {
+                    liveUrl = url;
+                    status.setText("✅ Сессия live");
+                    web.loadUrl(url);
                     setPanel(false);
                 } else if (loud) {
                     Toast.makeText(this, "Сессия не запущена — нажмите «Запустить раннер»",

@@ -3,19 +3,22 @@
 
 Две вкладки:
   * Local  — LAN-хост (Duo/Moonlight): автопоиск, 6-часовой таймер, Play.
-  * Cloud  — облачное место на GitHub-раннере: запустить/остановить раннер,
-             открыть сессию в браузере. Repo и токен настраиваются и хранятся
-             в nimbus_cloud.json рядом с клиентом — при закрытии аккаунта
-             GitHub достаточно указать новое зеркало (docs/MIGRATION.md).
+  * Cloud  — облачное место на GitHub-раннере: список целей (targets), запуск
+             workflow, подключение к живому экрану в браузере.
+
+«Цель» — это репо + workflow + куда положить сессию + входы запуска. Цели
+хранятся в nimbus_cloud.json и переключаются прямо в UI, поэтому один клиент
+может смотреть и на NimbusSeat-Runner, и на экран zen-panel, и на любой форк,
+не будучи жёстко привязанным к одному репозиторию. Логика целей и форматов
+сессии живёт в nimbus_targets.py (без tkinter, покрыта юнит-тестами).
 
 Только стандартная библиотека (tkinter + urllib).
 """
 from __future__ import annotations
 
-import base64
 import json
-import shutil
 import socket
+import shutil
 import subprocess
 import sys
 import threading
@@ -24,13 +27,13 @@ import tkinter as tk
 import urllib.request
 import webbrowser
 from pathlib import Path
-from tkinter import messagebox, simpledialog, ttk
+from tkinter import messagebox, ttk
+
+import nimbus_targets as nt
 
 DISCOVERY_PORT = 48121
 MAGIC = b"NIMBUSSEAT/1"
 CONF = Path(__file__).with_name("nimbus_cloud.json")
-GH = "https://api.github.com"
-WORKFLOW = "remote-seat.yml"
 
 
 # ----------------------------- LAN part -----------------------------------
@@ -78,56 +81,60 @@ def find_moonlight():
 # ----------------------------- Cloud part ---------------------------------
 
 class Cloud:
-    def __init__(self):
-        self.repo, self.token = "", ""
-        self.load()
+    """Config + GitHub actions for every target, whichever repo it points at."""
 
-    def load(self):
-        if CONF.is_file():
-            d = json.loads(CONF.read_text())
-            self.repo, self.token = d.get("repo", ""), d.get("token", "")
+    def __init__(self):
+        self.config = nt.load_config(CONF)
+
+    # -- config --------------------------------------------------------
+    @property
+    def token(self):
+        return self.config.get("token", "")
+
+    @property
+    def targets(self):
+        return self.config.get("targets", [])
+
+    def target(self):
+        return nt.find_target(self.config, self.config.get("active"))
+
+    def names(self):
+        return [t.get("name", t.get("repo", "?")) for t in self.targets]
+
+    def set_active(self, name):
+        self.config["active"] = name
+        self.save()
 
     def save(self):
-        CONF.write_text(json.dumps({"repo": self.repo, "token": self.token}))
+        nt.save_config(CONF, self.config)
 
-    def gh(self, method, path, body=None):
-        req = urllib.request.Request(
-            GH + path, method=method,
-            data=json.dumps(body).encode() if body else None,
-            headers={"Authorization": f"token {self.token}",
-                     "Accept": "application/vnd.github+json"})
-        try:
-            with urllib.request.urlopen(req, timeout=15) as r:
-                raw = r.read()
-                return r.status, json.loads(raw) if raw else {}
-        except urllib.error.HTTPError as e:
-            return e.code, {}
-        except OSError:
-            return 0, {}
+    # -- GitHub --------------------------------------------------------
+    def _gh(self):
+        return nt.GitHub(self.token)
 
-    def start(self, minutes=340, res="1280x720", fps=30):
-        code, _ = self.gh("POST", f"/repos/{self.repo}/actions/workflows/{WORKFLOW}/dispatches",
-                          {"ref": "main", "inputs": {"minutes": str(minutes),
-                                                     "resolution": res, "fps": str(fps)}})
-        return code == 204
+    def start(self, overrides=None):
+        target = self.target()
+        if not target:
+            return False
+        return self._gh().dispatch(target, overrides=overrides)
 
     def stop(self):
-        code, d = self.gh("GET", f"/repos/{self.repo}/actions/runs?per_page=10")
-        n = 0
-        for r in d.get("workflow_runs", []):
-            if r["name"].startswith("Remote Seat") and r["status"] in ("queued", "in_progress"):
-                self.gh("POST", f"/repos/{self.repo}/actions/runs/{r['id']}/cancel", {})
-                n += 1
-        return n
+        target = self.target()
+        if not target:
+            return 0
+        return self._gh().cancel(target)
 
     def session(self):
-        code, d = self.gh("GET", f"/repos/{self.repo}/contents/session.json?ref=live")
-        if code == 200 and "content" in d:
-            try:
-                return json.loads(base64.b64decode(d["content"]))
-            except ValueError:
-                pass
-        return None
+        target = self.target()
+        if not target:
+            return None
+        return self._gh().read_session(target)
+
+    def session_source(self):
+        target = self.target() or {}
+        session = target.get("session") or {}
+        return f"{target.get('repo', '?')} · {target.get('workflow', '?')} · " \
+               f"{session.get('branch', '?')}/{session.get('path', '?')}"
 
 
 # ----------------------------- UI -----------------------------------------
@@ -136,7 +143,7 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("NimbusSeat")
-        self.geometry("470x360")
+        self.geometry("500x420")
         self.cloud = Cloud()
         nb = ttk.Notebook(self)
         nb.pack(fill=tk.BOTH, expand=True)
@@ -222,9 +229,27 @@ class App(tk.Tk):
         f = ttk.Frame(nb)
         nb.add(f, text="☁ Облако (раннер)")
         self.c_state = ttk.Label(f, text="Раннер: …", font=("", 12, "bold"))
-        self.c_state.pack(pady=10)
+        self.c_state.pack(pady=8)
         self.c_info = ttk.Label(f, text="")
         self.c_info.pack()
+
+        pick = ttk.Frame(f)
+        pick.pack(pady=6)
+        ttk.Label(pick, text="Цель:").grid(row=0, column=0)
+        self.v_target = tk.StringVar()
+        names = self.cloud.names()
+        self.c_target = ttk.Combobox(pick, textvariable=self.v_target, width=26,
+                                     state="readonly", values=names)
+        if self.cloud.config.get("active") in names:
+            self.c_target.set(self.cloud.config["active"])
+        elif names:
+            self.c_target.set(names[0])
+        self.c_target.grid(row=0, column=1, padx=4)
+        self.c_target.bind("<<ComboboxSelected>>", lambda _e: self.c_pick())
+        ttk.Button(pick, text="⚙", width=3, command=self.c_conf).grid(row=0, column=2, padx=4)
+
+        self.c_src = ttk.Label(f, text="", foreground="#777")
+        self.c_src.pack()
 
         conf = ttk.Frame(f)
         conf.pack(pady=6)
@@ -242,34 +267,46 @@ class App(tk.Tk):
         ttk.Button(row, text="▶ Запустить раннер", command=self.c_start).grid(row=0, column=0, padx=4)
         ttk.Button(row, text="🔗 Открыть сессию", command=self.c_open).grid(row=0, column=1, padx=4)
         ttk.Button(row, text="⏹ Остановить", command=self.c_stop).grid(row=0, column=2, padx=4)
-        ttk.Button(f, text="⚙ Repo / токен", command=self.c_conf).pack(pady=4)
         ttk.Label(f, foreground="#777",
-                  text="Repo и токен хранятся локально (nimbus_cloud.json).\n"
-                       "Если аккаунт закроют — укажите новое зеркало (docs/MIGRATION.md).",
+                  text="Цели и токен хранятся локально (nimbus_cloud.json).\n"
+                       "Один клиент может смотреть на любой репо/раннер —\n"
+                       "переключайте цель в списке выше.",
                   justify=tk.CENTER).pack(pady=6)
+        self.c_sync_source()
         threading.Thread(target=self.c_poll, daemon=True).start()
 
+    def c_sync_source(self):
+        self.c_src.config(text=self.cloud.session_source())
+
+    def c_pick(self):
+        self.cloud.set_active(self.v_target.get())
+        self.c_sync_source()
+        self.c_poll_once()
+
     def c_conf(self):
-        repo = simpledialog.askstring("Облако", "owner/repo:", initialvalue=self.cloud.repo or
-                                      "sj0404-collab/NimbusSeat-Runner", parent=self)
-        if repo is None:
-            return
-        token = simpledialog.askstring("Облако", "GitHub token:", show="*", parent=self)
-        if token is None:
-            return
-        self.cloud.repo, self.cloud.token = repo.strip(), token.strip()
-        self.cloud.save()
+        TargetsDialog(self, self.cloud)
+        names = self.cloud.names()
+        self.c_target.configure(values=names)
+        if self.cloud.config.get("active") not in names and names:
+            self.cloud.set_active(names[0])
+        self.v_target.set(self.cloud.config.get("active", names[0] if names else ""))
+        self.c_sync_source()
 
     def c_ready(self):
-        if not self.cloud.repo or not self.cloud.token:
-            self.c_conf()
-        return bool(self.cloud.repo and self.cloud.token)
+        if not self.cloud.token or not self.cloud.target():
+            if not TargetsDialog(self, self.cloud).ok:
+                return False
+            names = self.cloud.names()
+            self.c_target.configure(values=names)
+            self.c_sync_source()
+        return bool(self.cloud.token and self.cloud.target())
 
     def c_start(self):
         if not self.c_ready():
             return
+        res, fps = self.v_res.get(), self.v_fps.get()
         def w():
-            ok = self.cloud.start(res=self.v_res.get(), fps=int(self.v_fps.get()))
+            ok = self.cloud.start(overrides={"resolution": res, "fps": fps})
             self.c_state.config(text="Раннер: запускается (1-3 мин)…" if ok else "Ошибка dispatch")
         threading.Thread(target=w, daemon=True).start()
 
@@ -278,7 +315,7 @@ class App(tk.Tk):
             return
         def w():
             s = self.cloud.session()
-            if s and s.get("state") == "live":
+            if s and s.get("live") and s.get("url"):
                 webbrowser.open(s["url"])
             else:
                 messagebox.showinfo("NimbusSeat", "Сессия ещё не live — подождите или запустите раннер")
@@ -292,17 +329,144 @@ class App(tk.Tk):
     def c_stop_done(self, n):
         self.c_state.config(text=f"Раннер: остановлено runs: {n}")
 
+    def c_poll_once(self):
+        def w():
+            if self.cloud.token and self.cloud.target():
+                s = self.cloud.session()
+                self.after(0, lambda: self._render_cloud(s))
+        threading.Thread(target=w, daemon=True).start()
+
     def c_poll(self):
         while True:
-            if self.cloud.repo and self.cloud.token:
-                s = self.cloud.session()
-                if s and s.get("state") == "live":
-                    self.c_state.config(text="Раннер: 🟢 LIVE")
-                    self.c_info.config(text=f"{s.get('resolution')} @ {s.get('fps')}fps, до {s.get('ends_at_utc')}")
-                else:
-                    self.c_state.config(text="Раннер: ⚪ выключен")
-                    self.c_info.config(text="")
+            self.c_poll_once()
             time.sleep(15)
+
+    def _render_cloud(self, s):
+        if s and s.get("live"):
+            self.c_state.config(text="Раннер: 🟢 LIVE")
+            detail = " ".join(x for x in [
+                s.get("kind"),
+                (f"{s['resolution']} @ {s['fps']}fps" if s.get("resolution") else ""),
+                (f"до {s['ends_at_utc']}" if s.get("ends_at_utc") else ""),
+            ] if x)
+            self.c_info.config(text=detail)
+        else:
+            self.c_state.config(text="Раннер: ⚪ выключен")
+            self.c_info.config(text="")
+
+
+class TargetsDialog(tk.Toplevel):
+    """Add / edit / delete targets, so one client can point at any repo."""
+
+    def __init__(self, master, cloud: Cloud):
+        super().__init__(master)
+        self.cloud = cloud
+        self.ok = False
+        self.title("Цели Cloud (репо / workflow / сессия)")
+        self.transient(master)
+        self.grab_set()
+
+        self.v_name = tk.StringVar()
+        self.v_repo = tk.StringVar()
+        self.v_token = tk.StringVar(value=cloud.token)
+        self.v_workflow = tk.StringVar()
+        self.v_branch = tk.StringVar()
+        self.v_path = tk.StringVar()
+        self.v_inputs = tk.StringVar()
+
+        self.pick = ttk.Combobox(self, width=30, state="readonly",
+                                 values=cloud.names())
+        self.pick.grid(row=0, column=0, columnspan=2, padx=8, pady=8)
+        self.pick.bind("<<ComboboxSelected>>", lambda _e: self.load())
+        if cloud.names():
+            self.pick.set(cloud.config.get("active", cloud.names()[0]))
+
+        rows = [("Название", self.v_name), ("repo (owner/name)", self.v_repo),
+                ("GitHub token", self.v_token), ("workflow (файл в .github)", self.v_workflow),
+                ("Ветка сессии", self.v_branch), ("Файл сессии", self.v_path),
+                ("inputs (JSON)", self.v_inputs)]
+        for i, (label, var) in enumerate(rows, start=1):
+            ttk.Label(self, text=label).grid(row=i, column=0, sticky="e", padx=6, pady=2)
+            show = "*" if var is self.v_token else ""
+            e = ttk.Entry(self, textvariable=var, width=34, show=show)
+            e.grid(row=i, column=1, padx=6, pady=2)
+        self.v_token.set(cloud.token)
+
+        bar = ttk.Frame(self)
+        bar.grid(row=len(rows) + 1, column=0, columnspan=2, pady=8)
+        ttk.Button(bar, text="Сохранить", command=self.save).grid(row=0, column=0, padx=3)
+        ttk.Button(bar, text="＋ Новая", command=self.new).grid(row=0, column=1, padx=3)
+        ttk.Button(bar, text="Удалить", command=self.delete).grid(row=0, column=2, padx=3)
+        ttk.Button(bar, text="Готово", command=self.close).grid(row=0, column=3, padx=3)
+
+        if cloud.names():
+            self.load()
+        self.wait_window(self)
+
+    def _target(self):
+        return nt.find_target(self.cloud.config, self.pick.get())
+
+    def load(self):
+        t = self._target() or {}
+        session = t.get("session") or {}
+        self.v_name.set(t.get("name", ""))
+        self.v_repo.set(t.get("repo", ""))
+        self.v_workflow.set(t.get("workflow", nt.NIMBUS_WORKFLOW))
+        self.v_branch.set(session.get("branch", "live"))
+        self.v_path.set(session.get("path", "session.json"))
+        self.v_inputs.set(json.dumps(t.get("inputs") or {}, ensure_ascii=False))
+
+    def save(self):
+        try:
+            inputs = json.loads(self.v_inputs.get() or "{}")
+            assert isinstance(inputs, dict)
+        except (ValueError, AssertionError):
+            return messagebox.showerror("NimbusSeat", "inputs — должен быть JSON-объект", parent=self)
+        target = {
+            "name": self.v_name.get().strip() or self.v_repo.get().strip(),
+            "repo": self.v_repo.get().strip(),
+            "token": "",
+            "workflow": self.v_workflow.get().strip() or nt.NIMBUS_WORKFLOW,
+            "inputs": inputs,
+            "session": {"branch": self.v_branch.get().strip() or "live",
+                        "path": self.v_path.get().strip() or "session.json"},
+        }
+        self.cloud.config["token"] = self.v_token.get().strip()
+        targets = [t for t in self.cloud.targets if t.get("name") != target["name"]
+                   and t.get("name") != self.pick.get()]
+        targets.append(target)
+        self.cloud.config["targets"] = targets
+        self.cloud.config["active"] = target["name"]
+        self.cloud.save()
+        self.ok = True
+        self.pick.configure(values=self.cloud.names())
+        self.pick.set(target["name"])
+        messagebox.showinfo("NimbusSeat", "Сохранено", parent=self)
+
+    def new(self):
+        self.pick.set("")
+        for var in (self.v_name, self.v_repo, self.v_workflow, self.v_branch,
+                    self.v_path, self.v_inputs):
+            var.set("")
+        self.v_workflow.set(nt.NIMBUS_WORKFLOW)
+        self.v_branch.set("live")
+        self.v_path.set("session.json")
+        self.v_inputs.set("{}")
+
+    def delete(self):
+        name = self.pick.get()
+        self.cloud.config["targets"] = [t for t in self.cloud.targets if t.get("name") != name]
+        if self.cloud.config.get("active") == name:
+            names = self.cloud.names()
+            self.cloud.config["active"] = names[0] if names else ""
+        self.cloud.save()
+        self.pick.configure(values=self.cloud.names())
+        if self.cloud.names():
+            self.pick.set(self.cloud.names()[0])
+            self.load()
+
+    def close(self):
+        self.destroy()
 
 
 if __name__ == "__main__":

@@ -30,8 +30,39 @@
    `KEYSTORE_B64` = base64 файла nimbus.keystore, `KEYSTORE_PASSWORD`, `KEY_ALIAS`.
 4. Обновляете конфиг в клиентах:
    - CLI: `export NIMBUS_REPO=NEW_OWNER/NimbusSeat-Runner NIMBUS_TOKEN=...`
-   - APK: экран «Облако» → ⚙ → repo + токен (сохраняется на устройстве);
+   - APK: экран «Облако» → ⚙ → repo + токен (+ workflow/сессия; сохраняется на устройстве);
    - Desktop: `nimbus_cloud.json` рядом с клиентом.
+
+## Любой репо/раннер, не только свой
+
+Начиная с обобщённых клиентов «облако» — это не один жёстко зашитый репозиторий,
+а список **целей**, каждая из которых описывает `repo + workflow + входы + где
+лежит живая сессия`. Поэтому один клиент может подключаться и к своему
+NimbusSeat-Runner, и, например, к экрану `zen-panel`.
+
+Формат `nimbus_cloud.json` (desktop):
+
+```json
+{
+  "token": "ghp_…",
+  "active": "zen-panel screen",
+  "targets": [
+    { "name": "NimbusSeat", "repo": "OWNER/NimbusSeat-Runner",
+      "workflow": "remote-seat.yml",
+      "inputs": {"minutes": "340", "resolution": "1280x720", "fps": "30"},
+      "session": {"branch": "live", "path": "session.json"} },
+    { "name": "zen-panel screen", "repo": "OWNER/zen-panel",
+      "workflow": "hub.yml",
+      "inputs": {"os": "linux", "label": "panel"},
+      "session": {"branch": "session-state", "path": "live/session-vnc.json"} }
+  ]
+}
+```
+
+Старый формат `{"repo": "...", "token": "..."}` читается по-прежнему и
+превращается в одну цель. Адрес берётся из `url`/`novncUrl`/`novnc`/`web`;
+если поля `state` нет (как у VNC-слота zen-panel) — сессия считается live при
+наличии адреса.
 
 ## Автономное управление раннером
 
