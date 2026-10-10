@@ -35,7 +35,7 @@ jobs:
           python - <<'PY'
           html = open('clients/web-touch/nimbus.html').read()
           for token in ['gamepadconnected', 'sendKey', 'data-gb', 'resChips',
-                        'fpsChips', 'bEye', 'websockify', 'applySrv']:
+                        'fpsChips', 'fab', 'websockify', 'applySrv']:
               assert token in html, f"missing {token}"
           print("nimbus.html OK")
           PY
