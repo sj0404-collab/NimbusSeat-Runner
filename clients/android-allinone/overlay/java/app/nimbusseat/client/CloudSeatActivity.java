@@ -63,28 +63,21 @@ public class CloudSeatActivity extends Activity {
 
     private TextView status;
     private WebView web;
-    private View stage;
-    private View previewOverlay;
     private LinearLayout controls;
     private View controlsPane;
-    private LinearLayout.LayoutParams webLp;
-    private int previewHeightPx;
-    private boolean controlsExpanded = true;
+    private boolean panelVisible = true;
     private String liveUrl = null;
 
     /**
-     * Show/hide the control panel. Panel visible => the stream sits in a short
-     * preview box (tap it to expand); hidden => stream is fullscreen.
+     * Show/hide the control panel. It is a translucent sheet over the stream,
+     * so the screen keeps filling the device either way - hiding the panel is
+     * what makes it feel fullscreen. Nothing is ever put over the stream that
+     * swallows touches: an earlier invisible click-catcher made the whole remote
+     * desktop untouchable, and 🖥 is the way in instead.
      */
-    private void setPanel(boolean preview) {
-        controlsExpanded = preview;
-        controlsPane.setVisibility(preview ? View.VISIBLE : View.GONE);
-        previewOverlay.setVisibility(preview && liveUrl != null ? View.VISIBLE : View.GONE);
-        if (webLp != null && stage != null) {
-            webLp.height = preview ? previewHeightPx : 0;
-            webLp.weight = preview ? 0f : 1f;
-            stage.setLayoutParams(webLp);
-        }
+    private void setPanel(boolean show) {
+        panelVisible = show;
+        controlsPane.setVisibility(show ? View.VISIBLE : View.GONE);
     }
 
     @Override
@@ -98,8 +91,7 @@ public class CloudSeatActivity extends Activity {
                 | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
 
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
+        FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(Color.parseColor("#0d0f13"));
 
         controls = new LinearLayout(this);
@@ -119,11 +111,11 @@ public class CloudSeatActivity extends Activity {
         start.setOnClickListener(v -> dispatchRunner());
         controls.addView(start, lp());
 
-        Button preview = btn("🔗 Предпросмотр");
+        Button preview = btn("📱 Панель управления");
         preview.setOnClickListener(v -> connect(false, false));
         controls.addView(preview, lp());
 
-        Button full = btn("⛶ На весь экран");
+        Button full = btn("🖥 Полный экран");
         full.setOnClickListener(v -> connect(true, false));
         controls.addView(full, lp());
 
@@ -141,36 +133,26 @@ public class CloudSeatActivity extends Activity {
 
         web = new WebView(this);
         configureWeb();
-
-        previewOverlay = new View(this);
-        previewOverlay.setBackgroundColor(Color.TRANSPARENT);
-        previewOverlay.setVisibility(View.GONE);
-        previewOverlay.setOnClickListener(v -> setPanel(false));
-
-        FrameLayout stageBox = new FrameLayout(this);
-        stageBox.addView(web, new FrameLayout.LayoutParams(
+        root.addView(web, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT));
-        stageBox.addView(previewOverlay, new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT));
-        stage = stageBox;
 
-        previewHeightPx = (int) (getResources().getDisplayMetrics().heightPixels * 0.45f);
-        webLp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, previewHeightPx);
-        root.addView(stage, webLp);
-
+        // The panel is a sheet over the stream: the screen still fills the
+        // device, and «Назад» hides it for a real fullscreen view.
+        controls.setBackgroundColor(Color.parseColor("#E60d0f13"));
         android.widget.ScrollView panel = new android.widget.ScrollView(this);
         panel.addView(controls, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT));
         controlsPane = panel;
-        root.addView(controlsPane, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+        FrameLayout.LayoutParams plp = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT);
+        plp.gravity = Gravity.BOTTOM;
+        root.addView(controlsPane, plp);
 
         setContentView(root);
-        connect(true, true);   // авто: если сессия уже live — сразу покажем
+        connect(true, true);   // авто: сессия уже live — сразу на весь экран
     }
 
     private LinearLayout.LayoutParams lp() {
@@ -196,6 +178,11 @@ public class CloudSeatActivity extends Activity {
         s.setUseWideViewPort(true);
         s.setLoadWithOverviewMode(true);
         web.setBackgroundColor(Color.BLACK);
+        web.setHapticFeedbackEnabled(false);
+        // Long-press on a remote desktop is a right click, not text selection:
+        // the callout that normally steals it has to go.
+        web.setLongClickable(false);
+        web.setOnLongClickListener(v -> true);
         web.setWebViewClient(new WebViewClient());
         web.setWebChromeClient(new WebChromeClient());
     }
@@ -491,8 +478,8 @@ public class CloudSeatActivity extends Activity {
             return;
         }
         lastBack = now;
-        setPanel(!controlsExpanded);
-        Toast.makeText(this, controlsExpanded
+        setPanel(!panelVisible);
+        Toast.makeText(this, panelVisible
                 ? "Панель показана. Двойное «Назад» — выход"
                 : "Стрим на весь экран. «Назад» — панель", Toast.LENGTH_SHORT).show();
     }
